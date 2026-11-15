@@ -1,0 +1,47 @@
+# ---------- Entorno y secretos ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.sqlite3
+staticfiles/
+media/
+
+# ---------- Flutter / Dart ----------
+# pubspec.lock SÍ se versiona (es una aplicación, no una librería)
+app_flutter/.dart_tool/
+app_flutter/build/
+app_flutter/.flutter-plugins
+app_flutter/.flutter-plugins-dependencies
+app_flutter/android/.gradle/
+app_flutter/android/local.properties
+app_flutter/android/key.properties
+app_flutter/android/app/*.jks
+app_flutter/ios/Pods/
+app_flutter/ios/Flutter/Generated.xcconfig
+*.apk
+*.aab
+
+# ---------- Node (por si se usa en herramientas) ----------
+node_modules/
+
+# ---------- IDE / Sistema operativo ----------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.iml
+.DS_Store
+Thumbs.db
+*.swp
