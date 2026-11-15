@@ -39,7 +39,7 @@ git checkout -b feature/<area>-<descripcion>
 
 Las reglas completas están en [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Pendientes de acuerdo del equipo
+## Pendientes
 
 - [ ] Asignar áreas y responsables (actualizar esta tabla y `.github/CODEOWNERS`)
 - [ ] Documentar detalles de la arquitectura seleccionada → `docs/arquitectura.md`
