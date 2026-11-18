@@ -67,3 +67,7 @@ USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Servicio catalogo: se consulta por HTTP interno para validar el medio y calcular el costo.
+CATALOGO_URL = os.environ.get("CATALOGO_URL", "http://catalogo:8000")
+CATALOGO_TIMEOUT = float(os.environ.get("CATALOGO_TIMEOUT", "3"))

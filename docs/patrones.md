@@ -12,8 +12,9 @@ Lista de referencia del enunciado del curso. Que aparezca aquí no significa que
 |---|---|---|---|---|
 | Strategy | | | | |
 | Adapter | | | | |
-| Facade | | | | |
+| Facade | Sí | `services/pedidos/pedidos/confirmacion.py`: clase `ConfirmacionPedido`, usada por `registrar` en `services/pedidos/pedidos/views.py` | Registrar un pedido requiere varios pasos: validar el cuerpo y la `Idempotency-Key`, revisar si la clave ya se usó, consultar `catalogo` por HTTP, calcular el costo y guardar (resolviendo la carrera de dos peticiones con la misma clave). La vista solo llama a `confirmar()` y recibe el pedido y el código HTTP; el orden de los pasos y el manejo de errores quedan en una sola clase que se prueba sin HTTP. | Int. 2 |
 | Repository | Sí | `services/catalogo/catalogo/repositorio.py`: clases `MedioRepositorio` y `TipoServicioRepositorio`, usadas por `services/catalogo/catalogo/views.py` | Las vistas no usan el ORM: piden datos al repositorio y reciben diccionarios con los campos exactos de `docs/api.md`. La consulta, la búsqueda sin mayúsculas ni acentos y la forma del JSON quedan en un solo lugar; si cambia el almacenamiento (SQLite, PostgreSQL) o la búsqueda, las vistas no cambian. | Int. 2 |
+| Repository | Sí | `services/pedidos/pedidos/repositorio.py`: clase `PedidoRepositorio`, usada por `ConfirmacionPedido` y por `services/pedidos/pedidos/views.py` | Ni las vistas ni la confirmación usan el ORM. El repositorio encapsula la creación con folio único (reintenta si choca), la detección de una `Idempotency-Key` repetida por la restricción única, el bloqueo de la fila al cambiar el estado y las dos formas del JSON del contrato (completa al registrar, mínima al consultar). | Int. 2 |
 | Gateway / BFF | | | | |
 | Observer | | | | |
 | Front Controller | | | | |
