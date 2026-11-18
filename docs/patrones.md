@@ -13,7 +13,7 @@ Lista de referencia del enunciado del curso. Que aparezca aquí no significa que
 | Strategy | | | | |
 | Adapter | | | | |
 | Facade | | | | |
-| Repository | | | | |
+| Repository | Sí | `services/catalogo/catalogo/repositorio.py`: clases `MedioRepositorio` y `TipoServicioRepositorio`, usadas por `services/catalogo/catalogo/views.py` | Las vistas no usan el ORM: piden datos al repositorio y reciben diccionarios con los campos exactos de `docs/api.md`. La consulta, la búsqueda sin mayúsculas ni acentos y la forma del JSON quedan en un solo lugar; si cambia el almacenamiento (SQLite, PostgreSQL) o la búsqueda, las vistas no cambian. | Int. 2 |
 | Gateway / BFF | | | | |
 | Observer | | | | |
 | Front Controller | | | | |
