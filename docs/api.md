@@ -585,6 +585,105 @@ Los valores de esta tabla son ilustrativos hasta que el equipo los apruebe.
 
 ---
 
+## Asistente
+
+> **Estado de esta sección:** Propuesto (Int. 4). El asistente atiende en el rol de comprador:
+> solo consulta, nunca registra pedidos ni cambia su estado. El clasificador de intenciones se
+> entrena con un script aparte y el servicio solo carga el artefacto `.joblib`.
+
+### Conversar con el asistente
+
+| Campo | Valor |
+|---|---|
+| Servicio | asistente |
+| Método | `POST` |
+| Ruta | `/api/asistente/` |
+| Responsable | Int. 4 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+```
+POST /api/asistente/
+```
+
+```json
+{
+  "mensaje": "¿Dónde está mi pedido PQ-20261117-7KQ3?"
+}
+```
+
+Reglas de validación:
+
+- `mensaje` es obligatorio: texto de 1 a 500 caracteres, sin contar espacios al inicio y al final.
+- Cada mensaje se atiende por separado; el asistente no guarda historial de la conversación.
+  Los datos que necesita una intención (folio, peso, distancia, etc.) deben venir en el
+  mismo mensaje. Si faltan, la respuesta los pide.
+
+**Respuesta exitosa** (`200`)
+
+```json
+{
+  "intencion": "rastrear",
+  "respuesta": "Tu pedido PQ-20261117-7KQ3 está EN_CAMINO en motocicleta. Fecha límite: 2026-11-20."
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `intencion` | Intención detectada: `rastrear`, `cotizar`, `recomendar`, `horarios`, `saludo` o `desconocida`. |
+| `respuesta` | Texto para mostrar al comprador. |
+
+**Cuando un servicio dependiente está caído**
+
+Si `pedidos` o `recomendar` no responden dentro del tiempo límite (propuesto: 3 segundos) o
+responden `503`, el asistente **no falla**: responde `200` con la intención detectada y una
+respuesta que avisa del problema. Así la conversación sigue y las intenciones que no dependen
+de otro servicio (`saludo`, `horarios`, `cotizar`) siguen funcionando.
+
+```json
+{
+  "intencion": "rastrear",
+  "respuesta": "En este momento no puedo consultar tu pedido. Intenta de nuevo en unos minutos."
+}
+```
+
+Otras respuestas de los servicios dependientes también se traducen a texto con `200`: un `404`
+de `pedidos` ("No encontré un pedido con ese folio") o un `400 sin_medio_apto` de `recomendar`
+("Ningún medio puede llevar ese paquete").
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `mensaje_vacio` | Falta `mensaje`, viene vacío o solo tiene espacios. |
+| `400` | `datos_invalidos` | El cuerpo no es JSON válido, `mensaje` no es texto o supera 500 caracteres. |
+| `503` | `modelo_no_disponible` | El servicio está arriba pero el clasificador de intenciones no se pudo cargar. |
+| `503` | `servicio_no_disponible` | El servicio `asistente` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (pantalla de chat).
+
+### Intenciones propuestas
+
+**Estado:** Propuesto.
+
+Los datos vivos (estado de un pedido, recomendación) siempre se consultan por API en el
+momento; nunca se responden con un texto guardado.
+
+| Intención | Ejemplo de mensaje | De dónde sale la respuesta | Datos que extrae del mensaje |
+|---|---|---|---|
+| `saludo` | "Hola, buenas tardes" | Información fija del asistente. | Ninguno. |
+| `horarios` | "¿A qué hora entregan?" | Información fija del asistente (horarios de atención y entrega). | Ninguno. |
+| `cotizar` | "¿Cuánto cuesta enviar un paquete?" | Información fija del asistente: tarifas de referencia por medio y tipo de servicio, y aviso de que el costo exacto lo calcula el sistema al registrar el pedido. | Ninguno. |
+| `rastrear` | "¿Dónde está mi pedido PQ-20261117-7KQ3?" | Consulta a la API de pedidos: `GET /api/pedidos/<folio>/`. | `folio` con formato `PQ-AAAAMMDD-XXXX`. Si no viene, la respuesta lo pide. |
+| `recomendar` | "¿Cómo mando 3 kg a 6 km, 30x20x15 cm, urgente?" | Consulta a la API de recomendar: `POST /api/recomendar/`. | `peso_kg`, `distancia_km`, `dimensiones_cm` y `urgente` (falso si no se menciona). Si falta alguno de los obligatorios, la respuesta los pide. |
+| `desconocida` | "¿Venden pizzas?" | Información fija del asistente: mensaje de ayuda con lo que sí puede hacer. | Ninguno. Se usa cuando la confianza del clasificador es baja. |
+
+El asistente llama a los otros servicios por HTTP interno (`http://pedidos:8000/...` y
+`http://recomendar:8000/...`), nunca importando su código ni leyendo su base de datos.
+
+---
+
 ## Operaciones que el alcance mínimo debe cubrir
 
 Lista de referencia del enunciado. Cada una necesita un contrato aprobado.
@@ -594,4 +693,4 @@ Marcadas: ya tienen contrato propuesto en este archivo, pendiente de aprobación
 - [x] Obtener una recomendación
 - [x] Registrar un pedido
 - [x] Consultar un pedido por folio
-- [ ] Conversar con el asistente
+- [x] Conversar con el asistente
