@@ -1,0 +1,104 @@
+# Entorno local completo: PostgreSQL, los 4 microservicios y el API Gateway.
+#
+#   cp .env.example .env
+#   docker compose up -d --build
+#
+# Solo el gateway se publica en el anfitrion (http://localhost:8080).
+# Los servicios y la base de datos solo son visibles dentro de la red de Compose.
+
+name: paqueteria
+
+x-servicio-django: &servicio-django
+  restart: unless-stopped
+  expose:
+    - "8000"
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: postgres
+      CATALOGO_DB_PASSWORD: ${CATALOGO_DB_PASSWORD:?Define CATALOGO_DB_PASSWORD en .env}
+      PEDIDOS_DB_PASSWORD: ${PEDIDOS_DB_PASSWORD:?Define PEDIDOS_DB_PASSWORD en .env}
+      RECOMENDAR_DB_PASSWORD: ${RECOMENDAR_DB_PASSWORD:?Define RECOMENDAR_DB_PASSWORD en .env}
+      ASISTENTE_DB_PASSWORD: ${ASISTENTE_DB_PASSWORD:?Define ASISTENTE_DB_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/01-crear-bases.sh:/docker-entrypoint-initdb.d/01-crear-bases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  catalogo:
+    <<: *servicio-django
+    build: ./services/catalogo
+    environment:
+      SECRET_KEY: ${CATALOGO_SECRET_KEY:?Define CATALOGO_SECRET_KEY en .env}
+      DEBUG: ${DJANGO_DEBUG:-False}
+      ALLOWED_HOSTS: catalogo,localhost,127.0.0.1
+      DB_NAME: catalogo
+      DB_USER: catalogo
+      DB_PASSWORD: ${CATALOGO_DB_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  pedidos:
+    <<: *servicio-django
+    build: ./services/pedidos
+    environment:
+      SECRET_KEY: ${PEDIDOS_SECRET_KEY:?Define PEDIDOS_SECRET_KEY en .env}
+      DEBUG: ${DJANGO_DEBUG:-False}
+      ALLOWED_HOSTS: pedidos,localhost,127.0.0.1
+      DB_NAME: pedidos
+      DB_USER: pedidos
+      DB_PASSWORD: ${PEDIDOS_DB_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  recomendar:
+    <<: *servicio-django
+    build: ./services/recomendar
+    environment:
+      SECRET_KEY: ${RECOMENDAR_SECRET_KEY:?Define RECOMENDAR_SECRET_KEY en .env}
+      DEBUG: ${DJANGO_DEBUG:-False}
+      ALLOWED_HOSTS: recomendar,localhost,127.0.0.1
+      DB_NAME: recomendar
+      DB_USER: recomendar
+      DB_PASSWORD: ${RECOMENDAR_DB_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  asistente:
+    <<: *servicio-django
+    build: ./services/asistente
+    environment:
+      SECRET_KEY: ${ASISTENTE_SECRET_KEY:?Define ASISTENTE_SECRET_KEY en .env}
+      DEBUG: ${DJANGO_DEBUG:-False}
+      ALLOWED_HOSTS: asistente,localhost,127.0.0.1
+      DB_NAME: asistente
+      DB_USER: asistente
+      DB_PASSWORD: ${ASISTENTE_DB_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+
+  # Sin depends_on hacia los servicios a proposito: el gateway debe arrancar y
+  # responder aunque algun servicio este caido (en ese caso su ruta da 503).
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  pgdata:
