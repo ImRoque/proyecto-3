@@ -1,0 +1,91 @@
+[
+  {
+    "model": "catalogo.medioentrega",
+    "pk": 1,
+    "fields": {
+      "clave": "camioneta",
+      "nombre": "Camioneta",
+      "descripcion": "Paquetes grandes o pesados y envíos foráneos",
+      "peso_max_kg": 1000,
+      "distancia_max_km": 300,
+      "velocidad_kmh": 50,
+      "costo_base": 120.0,
+      "costo_por_km": 8.0
+    }
+  },
+  {
+    "model": "catalogo.medioentrega",
+    "pk": 2,
+    "fields": {
+      "clave": "motocicleta",
+      "nombre": "Motocicleta",
+      "descripcion": "Entregas rápidas en ciudad",
+      "peso_max_kg": 20,
+      "distancia_max_km": 40,
+      "velocidad_kmh": 35,
+      "costo_base": 40.0,
+      "costo_por_km": 4.5
+    }
+  },
+  {
+    "model": "catalogo.medioentrega",
+    "pk": 3,
+    "fields": {
+      "clave": "bicicleta",
+      "nombre": "Bicicleta",
+      "descripcion": "Envíos ligeros y ecológicos en distancias cortas",
+      "peso_max_kg": 8,
+      "distancia_max_km": 8,
+      "velocidad_kmh": 15,
+      "costo_base": 25.0,
+      "costo_por_km": 2.0
+    }
+  },
+  {
+    "model": "catalogo.medioentrega",
+    "pk": 4,
+    "fields": {
+      "clave": "dron",
+      "nombre": "Dron",
+      "descripcion": "Paquetes ligeros en distancias cortas",
+      "peso_max_kg": 2,
+      "distancia_max_km": 10,
+      "velocidad_kmh": 60,
+      "costo_base": 80.0,
+      "costo_por_km": 6.0
+    }
+  },
+  {
+    "model": "catalogo.tiposervicio",
+    "pk": 1,
+    "fields": {
+      "clave": "estandar",
+      "nombre": "Estándar",
+      "descripcion": "Entrega en hasta 3 días",
+      "tiempo_max_horas": 72,
+      "multiplicador_costo": 1.0
+    }
+  },
+  {
+    "model": "catalogo.tiposervicio",
+    "pk": 2,
+    "fields": {
+      "clave": "express",
+      "nombre": "Express",
+      "descripcion": "Entrega en hasta 24 horas",
+      "tiempo_max_horas": 24,
+      "multiplicador_costo": 1.5
+    }
+  },
+  {
+    "model": "catalogo.tiposervicio",
+    "pk": 3,
+    "fields": {
+      "clave": "mismo_dia",
+      "nombre": "Mismo día",
+      "descripcion": "Entrega el mismo día",
+      "tiempo_max_horas": 12,
+      "multiplicador_costo": 2.0
+    }
+  }
+]

@@ -39,6 +39,28 @@ git checkout -b feature/<area>-<descripcion>
 
 Las reglas completas están en [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Levantar todo el sistema
+
+Requisitos: Docker con Docker Compose v2.
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Esto levanta PostgreSQL, los 4 microservicios y el API Gateway. Solo el gateway queda
+publicado, en `http://localhost:8080`; todo pasa por él:
+
+```bash
+curl http://localhost:8080/api/catalogo/health/
+curl http://localhost:8080/api/pedidos/health/
+curl http://localhost:8080/api/recomendar/health/
+curl http://localhost:8080/api/asistente/health/
+```
+
+Para apagar: `docker compose down` (conserva la base) o `docker compose down -v` (la borra).
+Más detalles en [gateway/README.md](gateway/README.md) e [infra/README.md](infra/README.md).
+
 ## Pendientes de acuerdo del equipo
 
 - [ ] Asignar áreas y responsables (actualizar esta tabla y `.github/CODEOWNERS`)
