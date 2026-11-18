@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/medio_entrega.dart';
+import '../models/pedido.dart';
+import '../models/tipo_servicio.dart';
 
 /// Error de una llamada al API, con un mensaje listo para mostrar al usuario.
 class ApiException implements Exception {
@@ -50,11 +52,32 @@ class ApiClient {
     if (parametros != null && parametros.isNotEmpty) {
       uri = uri.replace(queryParameters: parametros);
     }
+    return _enviar(() => _cliente.get(uri, headers: const {'Accept': 'application/json'}));
+  }
+
+  /// Hace `POST` a [ruta] con [cuerpo] en JSON y devuelve el JSON de respuesta.
+  ///
+  /// [encabezados] se agregan a los de JSON (por ejemplo `Idempotency-Key`).
+  /// Lanza [ApiException] igual que [getJson].
+  Future<Map<String, dynamic>> _postJson(
+    String ruta,
+    Map<String, dynamic> cuerpo, {
+    Map<String, String> encabezados = const {},
+  }) {
+    final uri = Uri.parse('$baseUrl$ruta');
+    final todos = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
+      ...encabezados,
+    };
+    return _enviar(() => _cliente.post(uri, headers: todos, body: utf8.encode(jsonEncode(cuerpo))));
+  }
+
+  /// Ejecuta la llamada con tiempo límite y convierte los fallos de red en [ApiException].
+  Future<Map<String, dynamic>> _enviar(Future<http.Response> Function() llamada) async {
     final http.Response respuesta;
     try {
-      respuesta = await _cliente
-          .get(uri, headers: const {'Accept': 'application/json'})
-          .timeout(tiempoLimite);
+      respuesta = await llamada().timeout(tiempoLimite);
     } on TimeoutException {
       throw ApiException('El servidor tardó más de ${tiempoLimite.inSeconds} s en responder.');
     } on http.ClientException {
@@ -127,6 +150,45 @@ class ApiClient {
   Future<MedioEntrega> obtenerMedio(String clave) async {
     final datos = await getJson('/api/catalogo/medios/${Uri.encodeComponent(clave)}/');
     return _convertir(() => MedioEntrega.fromJson(datos));
+  }
+
+  /// `GET /api/catalogo/tipos-servicio/`.
+  Future<List<TipoServicio>> listarTiposServicio() async {
+    final datos = await getJson('/api/catalogo/tipos-servicio/');
+    final tipos = datos['tipos_servicio'];
+    if (tipos is! List) {
+      throw const ApiException('El servidor respondió con un formato inesperado.');
+    }
+    return _convertir(
+      () => [for (final tipo in tipos) TipoServicio.fromJson(tipo as Map<String, dynamic>)],
+    );
+  }
+
+  // ---------- Pedidos (docs/api.md, sección "Pedidos") ----------
+
+  /// `POST /api/pedidos/` con el encabezado `Idempotency-Key`.
+  ///
+  /// Quien llama debe reutilizar la misma [idempotencyKey] en todos los reintentos del mismo
+  /// envío: si el servidor ya lo registró, responde `200` con el mismo pedido (mismo folio).
+  /// Los errores del contrato (`datos_invalidos`, `medio_no_apto`,
+  /// `idempotency_key_reutilizada`, `servicio_no_disponible`) llegan en
+  /// [ApiException.codigoError].
+  Future<Pedido> registrarPedido(
+    SolicitudPedido solicitud, {
+    required String idempotencyKey,
+  }) async {
+    final datos = await _postJson(
+      '/api/pedidos/',
+      solicitud.toJson(),
+      encabezados: {'Idempotency-Key': idempotencyKey},
+    );
+    return _convertir(() => Pedido.fromJson(datos));
+  }
+
+  /// `GET /api/pedidos/<folio>/`. Si no existe, lanza [ApiException] con `codigoHttp` 404.
+  Future<PedidoResumen> consultarPedido(String folio) async {
+    final datos = await getJson('/api/pedidos/${Uri.encodeComponent(folio)}/');
+    return _convertir(() => PedidoResumen.fromJson(datos));
   }
 
   /// Convierte errores de formato del JSON en [ApiException] con un mensaje claro.
