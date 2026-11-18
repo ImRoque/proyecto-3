@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'config.dart';
-import 'screens/estado_screen.dart';
+import 'screens/inicio_screen.dart';
 import 'services/api_client.dart';
 
 void main() {
@@ -18,7 +18,7 @@ class ProyectoApp extends StatelessWidget {
     return MaterialApp(
       title: 'Paquetería',
       theme: ThemeData(colorSchemeSeed: Colors.indigo),
-      home: EstadoScreen(api: api, apiUrl: apiUrl),
+      home: InicioScreen(api: api, apiUrl: apiUrl),
     );
   }
 }

@@ -4,21 +4,31 @@
 
 **Responsable:** Int. 5
 
-## Estado actual (Etapa 4, Hito A)
+## Estado actual (Etapa 5, Hito B)
 
-Solo hay una **pantalla de estado** que consulta `GET /api/<servicio>/health/` de los 4 servicios
-a través del gateway y muestra cada uno como *Conectado* o *No disponible*, con botón
-*Reintentar*. Sirve para comprobar que web y Android llegan al gateway.
+La app abre con una **navegación inferior** de dos pestañas:
+
+- **Catálogo:** lista los medios de entrega de `GET /api/catalogo/medios/` con un campo de
+  búsqueda (`?q=`, máximo 100 caracteres) que consulta al escribir, después de 400 ms sin
+  teclear, o al pulsar Enter. Muestra estados de **cargando**, **error con Reintentar** y
+  **sin resultados**. Al tocar un medio abre su detalle (`GET /api/catalogo/medios/<clave>/`).
+- **Estado:** la pantalla de la Etapa 4, que consulta `GET /api/<servicio>/health/` de los
+  4 servicios y muestra cada uno como *Conectado* o *No disponible*.
 
 ## Estructura de `lib/`
 
 | Archivo | Responsabilidad |
 |---|---|
 | `config.dart` | URL base del gateway, leída con `String.fromEnvironment('API_URL')`. Por defecto `http://localhost:8080`. |
-| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. |
+| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})` y `obtenerMedio(clave)`. |
+| `models/medio_entrega.dart` | `MedioEntrega` con `fromJson` según el contrato de `docs/api.md`. |
+| `screens/inicio_screen.dart` | Navegación inferior (Catálogo y Estado). |
+| `screens/catalogo_screen.dart` | Catálogo con búsqueda. |
+| `screens/medio_detalle_screen.dart` | Detalle de un medio de entrega. |
 | `screens/estado_screen.dart` | Pantalla de estado de los servicios. |
-| `main.dart` | Abre la pantalla de estado. |
+| `main.dart` | Abre la pantalla de inicio. |
 
+Las pantallas no hacen HTTP directo: todo pasa por `ApiClient`.
 Las pantallas nunca escriben la URL del API: la reciben de `config.dart`.
 
 ## URL base por plataforma

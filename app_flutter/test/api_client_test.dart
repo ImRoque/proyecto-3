@@ -132,4 +132,111 @@ void main() {
       );
     });
   });
+
+  group('ApiClient catalogo', () {
+    const moto = {
+      'clave': 'motocicleta',
+      'nombre': 'Motocicleta',
+      'descripcion': 'Entregas rápidas en ciudad',
+      'peso_max_kg': 20.0,
+      'distancia_max_km': 40.0,
+      'velocidad_kmh': 35.0,
+      'costo_base': 40.0,
+      'costo_por_km': 4.5,
+    };
+
+    test('listarMedios sin busqueda no manda q', () async {
+      late Uri pedida;
+      final api = ApiClient(
+        baseUrl: 'http://gw',
+        cliente: MockClient((request) async {
+          pedida = request.url;
+          return _json({
+            'medios': [moto],
+            'total': 1,
+          }, 200);
+        }),
+      );
+
+      final medios = await api.listarMedios(q: '   ');
+
+      expect(pedida.toString(), 'http://gw/api/catalogo/medios/');
+      expect(medios.single.clave, 'motocicleta');
+      expect(medios.single.costoPorKm, 4.5);
+    });
+
+    test('listarMedios manda q recortado y codificado', () async {
+      late Uri pedida;
+      final api = ApiClient(
+        baseUrl: 'http://gw',
+        cliente: MockClient((request) async {
+          pedida = request.url;
+          return _json({'medios': [], 'total': 0}, 200);
+        }),
+      );
+
+      final medios = await api.listarMedios(q: ' rápidas ');
+
+      expect(pedida.path, '/api/catalogo/medios/');
+      expect(pedida.queryParameters, {'q': 'rápidas'});
+      expect(pedida.query, 'q=r%C3%A1pidas');
+      expect(medios, isEmpty);
+    });
+
+    test('listarMedios con formato inesperado lanza ApiException', () async {
+      final api = ApiClient(
+        baseUrl: 'http://gw',
+        cliente: MockClient(
+          (_) async => _json({
+            'medios': [
+              {'clave': 'x'},
+            ],
+          }, 200),
+        ),
+      );
+
+      await expectLater(
+        api.listarMedios(),
+        throwsA(isA<ApiException>().having((e) => e.mensaje, 'mensaje', contains('formato'))),
+      );
+    });
+
+    test('obtenerMedio pide la ruta de detalle', () async {
+      late Uri pedida;
+      final api = ApiClient(
+        baseUrl: 'http://gw',
+        cliente: MockClient((request) async {
+          pedida = request.url;
+          return _json(moto, 200);
+        }),
+      );
+
+      final medio = await api.obtenerMedio('motocicleta');
+
+      expect(pedida.toString(), 'http://gw/api/catalogo/medios/motocicleta/');
+      expect(medio.nombre, 'Motocicleta');
+    });
+
+    test('obtenerMedio inexistente lanza no_encontrado', () async {
+      final api = ApiClient(
+        baseUrl: 'http://gw',
+        cliente: MockClient(
+          (_) async => _json({
+            'error': 'no_encontrado',
+            'detalle': 'No existe el medio con clave submarino',
+          }, 404),
+        ),
+      );
+
+      await expectLater(
+        api.obtenerMedio('submarino'),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.codigoHttp, 'codigoHttp', 404)
+              .having((e) => e.codigoError, 'codigoError', 'no_encontrado')
+              .having((e) => e.mensaje, 'mensaje', 'No existe el medio con clave submarino'),
+        ),
+      );
+    });
+  });
 }
