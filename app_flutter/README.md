@@ -6,12 +6,19 @@
 
 ## Estado actual (Etapa 5, Hito B)
 
-La app abre con una **navegación inferior** de dos pestañas:
+La app abre con una **navegación inferior** de cuatro pestañas:
 
 - **Catálogo:** lista los medios de entrega de `GET /api/catalogo/medios/` con un campo de
   búsqueda (`?q=`, máximo 100 caracteres) que consulta al escribir, después de 400 ms sin
   teclear, o al pulsar Enter. Muestra estados de **cargando**, **error con Reintentar** y
   **sin resultados**. Al tocar un medio abre su detalle (`GET /api/catalogo/medios/<clave>/`).
+- **Enviar:** formulario de pedido (`POST /api/pedidos/`). El medio y el tipo de servicio se
+  eligen de listas del catálogo; todavía no hay recomendación. Valida los campos antes de
+  enviar (obligatorios, números mayores que 0, fecha no anterior a hoy y capacidad del medio),
+  pero la decisión final es del servidor. Al confirmar muestra el **folio**.
+- **Rastrear:** consulta por folio (`GET /api/pedidos/<folio>/`) con la **línea de estados**
+  `CREADO → EN_CAMINO → ENTREGADO` (o `CREADO → CANCELADO`) y estados de **cargando**,
+  **error con Reintentar** y **folio no encontrado**.
 - **Estado:** la pantalla de la Etapa 4, que consulta `GET /api/<servicio>/health/` de los
   4 servicios y muestra cada uno como *Conectado* o *No disponible*.
 
@@ -20,12 +27,18 @@ La app abre con una **navegación inferior** de dos pestañas:
 | Archivo | Responsabilidad |
 |---|---|
 | `config.dart` | URL base del gateway, leída con `String.fromEnvironment('API_URL')`. Por defecto `http://localhost:8080`. |
-| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})` y `obtenerMedio(clave)`. |
+| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})`, `obtenerMedio(clave)` y `listarTiposServicio()`. Pedidos: `registrarPedido(solicitud, idempotencyKey:)` y `consultarPedido(folio)`. |
 | `models/medio_entrega.dart` | `MedioEntrega` con `fromJson` según el contrato de `docs/api.md`. |
+| `models/tipo_servicio.dart` | `TipoServicio` del catálogo. |
+| `models/pedido.dart` | `SolicitudPedido` (cuerpo del registro), `Pedido` (respuesta completa), `PedidoResumen` (consulta por folio), estados y formato del folio. |
+| `services/idempotencia.dart` | Genera el UUID v4 de `Idempotency-Key` con `Random.secure()`. |
 | `screens/inicio_screen.dart` | Navegación inferior (Catálogo y Estado). |
 | `screens/catalogo_screen.dart` | Catálogo con búsqueda. |
 | `screens/medio_detalle_screen.dart` | Detalle de un medio de entrega. |
 | `screens/estado_screen.dart` | Pantalla de estado de los servicios. |
+| `screens/nuevo_envio_screen.dart` | Formulario de nuevo envío. |
+| `screens/confirmacion_screen.dart` | Envío registrado: folio, costo y accesos a rastrear o a un envío nuevo. |
+| `screens/rastreo_screen.dart` | Consulta por folio y `LineaEstados`. |
 | `main.dart` | Abre la pantalla de inicio. |
 
 Las pantallas no hacen HTTP directo: todo pasa por `ApiClient`.
@@ -78,5 +91,19 @@ flutter test
 ```
 
 Las pruebas usan `MockClient` del paquete `http`; no necesitan el backend.
+
+### Doble toque al confirmar un envío
+
+Dos toques rápidos en **Confirmar envío** nunca crean dos pedidos:
+
+1. El botón se deshabilita mientras espera la respuesta, y el método ignora un segundo toque
+   que llegue en el mismo cuadro, antes de que el botón se redibuje.
+2. Cada formulario tiene una `Idempotency-Key` que se genera al abrirlo, se reutiliza en todos
+   los reintentos (por ejemplo, tras un error de red) y solo se renueva cuando el pedido se
+   registró con éxito. Si el servidor ya lo había registrado, responde con el mismo folio.
+
+Si después de un error el usuario cambia datos y el servidor responde
+`409 idempotency_key_reutilizada`, la pantalla ofrece **Empezar envío nuevo**, que genera otra
+clave a propósito.
 
 Nota: **`pubspec.lock` se versiona** (es una aplicación, no una librería).
