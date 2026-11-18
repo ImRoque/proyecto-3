@@ -12,12 +12,34 @@
 
 ## Estado actual
 
-Esqueleto Django 5 (proyecto `config`, app `catalogo`). Por ahora solo expone la ruta
-de salud definida en `docs/api.md`:
+Servicio Django 5 (proyecto `config`, app `catalogo`) con las rutas de `docs/api.md`:
 
-```
-GET /api/catalogo/health/  ->  200  {"servicio": "catalogo", "ok": true}
-```
+| Método | Ruta | Respuesta |
+|---|---|---|
+| `GET` | `/api/catalogo/health/` | `{"servicio": "catalogo", "ok": true}` |
+| `GET` | `/api/catalogo/medios/?q=<texto>` | `{"medios": [...], "total": N}`. `q` es opcional, busca en `nombre` y `descripcion` sin distinguir mayúsculas ni acentos; más de 100 caracteres da `400 datos_invalidos`. |
+| `GET` | `/api/catalogo/medios/<clave>/` | El medio, o `404 no_encontrado`. |
+| `GET` | `/api/catalogo/tipos-servicio/` | `{"tipos_servicio": [...], "total": N}` |
+
+Rutas inexistentes, o un método distinto de `GET`, responden `404 ruta_no_encontrada`.
+Todos los errores usan el formato `{"error": "<codigo>", "detalle": "<texto>"}`.
+
+### Organización del código
+
+| Archivo | Qué contiene |
+|---|---|
+| `catalogo/models.py` | Modelos `MedioEntrega` y `TipoServicio`. |
+| `catalogo/repositorio.py` | Acceso a datos (patrón Repository). Las vistas no usan el ORM. |
+| `catalogo/views.py` | Validación de la petición y armado de la respuesta. |
+| `catalogo/errores.py` | Respuestas JSON y formato único de error. |
+| `catalogo/fixtures/catalogo_inicial.json` | Datos de prueba: 4 medios y 3 tipos de servicio. |
+| `entrypoint.sh` | Arranque en Docker: `migrate`, `loaddata` y gunicorn. |
+
+### Datos de prueba
+
+Los límites de peso y distancia coinciden con las reglas R1 y R2 de `recomendar` en
+`docs/api.md`. En Docker se cargan solos al arrancar; `loaddata` se puede repetir sin
+duplicar porque cada registro tiene `pk` fija.
 
 ## Variables de entorno
 
@@ -38,11 +60,14 @@ Desde `services/catalogo/`:
 python -m venv .venv
 source .venv/bin/activate        # En Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+python manage.py migrate
+python manage.py loaddata catalogo_inicial.json
 python manage.py runserver 8000
 ```
 
 ```bash
 curl -i http://localhost:8000/api/catalogo/health/
+curl -i "http://localhost:8000/api/catalogo/medios/?q=moto"
 ```
 
 ## Correrlo con Docker
