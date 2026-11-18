@@ -482,13 +482,116 @@ Mismos datos mínimos que la consulta por folio, más el estado anterior.
 
 ---
 
+## Recomendar
+
+> **Estado de esta sección:** Propuesto (Int. 3). El modelo se entrena con un script aparte
+> y el servicio solo carga el artefacto `.joblib`; nunca entrena dentro de una petición.
+
+### Obtener recomendación
+
+| Campo | Valor |
+|---|---|
+| Servicio | recomendar |
+| Método | `POST` |
+| Ruta | `/api/recomendar/` |
+| Responsable | Int. 3 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+```
+POST /api/recomendar/
+```
+
+```json
+{
+  "peso_kg": 3.5,
+  "distancia_km": 6.0,
+  "urgente": false,
+  "dimensiones_cm": {"largo": 30, "ancho": 20, "alto": 15}
+}
+```
+
+Reglas de validación:
+
+- Todos los campos son obligatorios.
+- `peso_kg`, `distancia_km` y cada medida de `dimensiones_cm`: números mayores que 0.
+- `urgente`: booleano (`true` o `false`).
+
+**Respuesta exitosa** (`200`)
+
+```json
+{
+  "medio_modelo": "dron",
+  "confianza": 0.62,
+  "medio_final": "motocicleta",
+  "corregido_por_reglas": true,
+  "motivo": "El dron no lleva más de 2 kg; se eligió el siguiente medio apto según el modelo.",
+  "alternativas": [
+    {"medio": "bicicleta", "confianza": 0.08},
+    {"medio": "camioneta", "confianza": 0.05}
+  ]
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `medio_modelo` | Clase que propuso el modelo (la de mayor probabilidad). |
+| `confianza` | Probabilidad que el modelo asignó a `medio_modelo`, de 0 a 1. |
+| `medio_final` | Medio recomendado después de aplicar las reglas de negocio. |
+| `corregido_por_reglas` | `true` si una regla descartó a `medio_modelo` y `medio_final` es distinto. |
+| `motivo` | Texto corto que explica la decisión. Si hubo corrección, nombra la regla. |
+| `alternativas` | Otros medios que cumplen las reglas, sin `medio_final`, ordenados por la probabilidad del modelo (`confianza`). Puede ser una lista vacía. |
+
+Los valores de `medio_modelo`, `medio_final` y `alternativas[].medio` son las claves del
+catálogo: `camioneta`, `motocicleta`, `bicicleta` o `dron`.
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `datos_invalidos` | El cuerpo no es JSON válido, falta un campo o un valor no cumple las reglas de validación. |
+| `400` | `sin_medio_apto` | Ningún medio cumple las reglas de negocio (por ejemplo, el peso supera la capacidad de la camioneta). |
+| `503` | `modelo_no_disponible` | El servicio está arriba pero el artefacto del modelo no se pudo cargar. |
+| `503` | `servicio_no_disponible` | El servicio `recomendar` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (pantalla de recomendación, antes de registrar el pedido) y el
+servicio `asistente` (intención `recomendar`).
+
+### Reglas de negocio propuestas
+
+**Estado:** Propuesto.
+
+Las reglas tienen la última palabra sobre el modelo. Se evalúan en el servidor de
+`recomendar` y descartan medios que no pueden hacer el envío.
+
+| Regla | Enunciado |
+|---|---|
+| R1. Peso máximo | Un medio se descarta si `peso_kg` supera su peso máximo: dron 2 kg, bicicleta 8 kg, motocicleta 20 kg, camioneta 1000 kg. |
+| R2. Distancia máxima | Un medio se descarta si `distancia_km` supera su distancia máxima: dron 10 km, bicicleta 8 km, motocicleta 40 km, camioneta 300 km. |
+| R3. Tamaño del paquete | Un medio se descarta si el lado más largo de `dimensiones_cm` supera su límite: dron 40 cm, bicicleta 50 cm, motocicleta 60 cm, camioneta 200 cm. |
+| R4. Urgencia | Si `urgente` es `true` y `distancia_km` es mayor que 3, se descarta la bicicleta. |
+
+Cómo se decide el `medio_final`:
+
+1. Si `medio_modelo` cumple todas las reglas, es el `medio_final` y
+   `corregido_por_reglas` es `false`.
+2. Si no las cumple, el `medio_final` es el medio apto con mayor probabilidad del modelo y
+   `corregido_por_reglas` es `true`.
+3. Si ningún medio es apto, responde `400 sin_medio_apto`.
+
+Los límites de R1 y R2 deben coincidir con `peso_max_kg` y `distancia_max_km` del catálogo.
+Los valores de esta tabla son ilustrativos hasta que el equipo los apruebe.
+
+---
+
 ## Operaciones que el alcance mínimo debe cubrir
 
 Lista de referencia del enunciado. Cada una necesita un contrato aprobado.
 Marcadas: ya tienen contrato propuesto en este archivo, pendiente de aprobación.
 
 - [x] Explorar y buscar en el catálogo
-- [ ] Obtener una recomendación
+- [x] Obtener una recomendación
 - [x] Registrar un pedido
 - [x] Consultar un pedido por folio
 - [ ] Conversar con el asistente
