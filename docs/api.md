@@ -83,12 +83,412 @@ Copia este bloque por cada endpoint propuesto.
 
 ---
 
+## Catálogo
+
+> **Estado de esta sección:** Propuesto (Int. 2). Los valores numéricos de los ejemplos
+> (pesos, distancias, costos, horas) son ilustrativos; los definitivos se cargan como datos
+> de prueba en `services/catalogo/`.
+
+**Medio de entrega.** Campos que devuelve el catálogo:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `clave` | texto | Identificador fijo: `camioneta`, `motocicleta`, `bicicleta` o `dron`. |
+| `nombre` | texto | Nombre para mostrar. |
+| `descripcion` | texto | Descripción corta. |
+| `peso_max_kg` | número | Peso máximo que puede llevar. |
+| `distancia_max_km` | número | Distancia máxima que puede recorrer. |
+| `velocidad_kmh` | número | Velocidad promedio. |
+| `costo_base` | número | Costo fijo por envío, en MXN. |
+| `costo_por_km` | número | Costo por kilómetro, en MXN. |
+
+**Tipo de servicio.** Campos que devuelve el catálogo:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `clave` | texto | Identificador fijo: `estandar`, `express` o `mismo_dia`. |
+| `nombre` | texto | Nombre para mostrar. |
+| `descripcion` | texto | Descripción corta. |
+| `tiempo_max_horas` | entero | Tiempo máximo de entrega comprometido. |
+| `multiplicador_costo` | número | Factor que se aplica al costo del medio. |
+
+### Listar medios de entrega
+
+| Campo | Valor |
+|---|---|
+| Servicio | catalogo |
+| Método | `GET` |
+| Ruta | `/api/catalogo/medios/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+Parámetro opcional `q`: texto a buscar en `nombre` y `descripcion`, sin distinguir
+mayúsculas ni acentos. Sin `q` devuelve todos los medios.
+
+```
+GET /api/catalogo/medios/?q=moto
+```
+
+**Respuesta exitosa** (`200`)
+
+```json
+{
+  "medios": [
+    {
+      "clave": "motocicleta",
+      "nombre": "Motocicleta",
+      "descripcion": "Entregas rápidas en ciudad",
+      "peso_max_kg": 20,
+      "distancia_max_km": 40,
+      "velocidad_kmh": 35,
+      "costo_base": 40.0,
+      "costo_por_km": 4.5
+    }
+  ],
+  "total": 1
+}
+```
+
+Si ningún medio coincide, responde `200` con `"medios": []` y `"total": 0`.
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `datos_invalidos` | `q` tiene más de 100 caracteres. |
+| `503` | `servicio_no_disponible` | El servicio `catalogo` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (pantalla de catálogo y búsqueda).
+
+### Detalle de un medio de entrega
+
+| Campo | Valor |
+|---|---|
+| Servicio | catalogo |
+| Método | `GET` |
+| Ruta | `/api/catalogo/medios/<clave>/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+```
+GET /api/catalogo/medios/dron/
+```
+
+**Respuesta exitosa** (`200`)
+
+```json
+{
+  "clave": "dron",
+  "nombre": "Dron",
+  "descripcion": "Paquetes ligeros en distancias cortas",
+  "peso_max_kg": 2,
+  "distancia_max_km": 10,
+  "velocidad_kmh": 60,
+  "costo_base": 80.0,
+  "costo_por_km": 6.0
+}
+```
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `404` | `no_encontrado` | No existe un medio con esa `clave`. |
+| `503` | `servicio_no_disponible` | El servicio `catalogo` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (pantalla de detalle) y el servicio `pedidos` (validar el medio
+y calcular el costo al registrar un pedido).
+
+### Listar tipos de servicio
+
+| Campo | Valor |
+|---|---|
+| Servicio | catalogo |
+| Método | `GET` |
+| Ruta | `/api/catalogo/tipos-servicio/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+Sin parámetros.
+
+```
+GET /api/catalogo/tipos-servicio/
+```
+
+**Respuesta exitosa** (`200`)
+
+```json
+{
+  "tipos_servicio": [
+    {
+      "clave": "estandar",
+      "nombre": "Estándar",
+      "descripcion": "Entrega en hasta 3 días",
+      "tiempo_max_horas": 72,
+      "multiplicador_costo": 1.0
+    },
+    {
+      "clave": "express",
+      "nombre": "Express",
+      "descripcion": "Entrega en hasta 24 horas",
+      "tiempo_max_horas": 24,
+      "multiplicador_costo": 1.5
+    },
+    {
+      "clave": "mismo_dia",
+      "nombre": "Mismo día",
+      "descripcion": "Entrega el mismo día",
+      "tiempo_max_horas": 12,
+      "multiplicador_costo": 2.0
+    }
+  ],
+  "total": 3
+}
+```
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `503` | `servicio_no_disponible` | El servicio `catalogo` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (formulario de pedido) y el servicio `pedidos` (validar el tipo
+y calcular el costo).
+
+---
+
+## Pedidos
+
+> **Estado de esta sección:** Propuesto (Int. 2). No hay autenticación (fuera de alcance),
+> por lo que cualquiera que conozca un folio puede consultarlo o cambiar su estado. Por eso
+> la consulta devuelve solo datos mínimos.
+
+**Estados y transiciones válidas**
+
+| Estado actual | Puede pasar a |
+|---|---|
+| `CREADO` | `EN_CAMINO`, `CANCELADO` |
+| `EN_CAMINO` | `ENTREGADO` |
+| `ENTREGADO` | ninguno (final) |
+| `CANCELADO` | ninguno (final) |
+
+**Cálculo del costo (lo hace siempre el servidor).** `pedidos` consulta al servicio `catalogo`
+por HTTP interno (`http://catalogo:8000/api/catalogo/...`) con tiempo límite y aplica:
+
+```
+costo = (costo_base + costo_por_km * distancia_km) * multiplicador_costo
+        + 10 % de ese subtotal si seguro = true
+```
+
+El costo se guarda en el pedido al crearlo; si después cambia el catálogo, el pedido no cambia.
+Se redondea a 2 decimales y la moneda es MXN.
+
+### Registrar un pedido
+
+| Campo | Valor |
+|---|---|
+| Servicio | pedidos |
+| Método | `POST` |
+| Ruta | `/api/pedidos/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+Encabezados:
+
+| Encabezado | Obligatorio | Valor |
+|---|---|---|
+| `Content-Type` | Sí | `application/json; charset=utf-8` |
+| `Idempotency-Key` | Sí | UUID v4 generado por el cliente. |
+
+```
+POST /api/pedidos/
+Idempotency-Key: 3f6c2a1e-8b7d-4c1a-9e2f-5a4b3c2d1e0f
+```
+
+```json
+{
+  "origen": "Av. Juárez 100, Centro, Guadalajara",
+  "destino": "Calle Hidalgo 25, Zapopan",
+  "distancia_km": 8.5,
+  "peso_kg": 2.3,
+  "dimensiones_cm": {"largo": 30, "ancho": 20, "alto": 15},
+  "urgente": false,
+  "seguro": true,
+  "fecha_limite": "2026-11-20",
+  "medio": "motocicleta",
+  "tipo_servicio": "express"
+}
+```
+
+Reglas de validación (las aplica el servidor):
+
+- Todos los campos son obligatorios.
+- `origen` y `destino`: texto no vacío de máximo 200 caracteres.
+- `distancia_km`, `peso_kg` y cada medida de `dimensiones_cm`: números mayores que 0.
+- `fecha_limite`: fecha ISO 8601 igual o posterior a hoy.
+- `medio` y `tipo_servicio`: claves existentes en el catálogo.
+- `peso_kg` no puede superar `peso_max_kg` del medio y `distancia_km` no puede superar
+  `distancia_max_km`.
+
+**Evitar duplicados por doble clic (`Idempotency-Key`)**
+
+- Flutter genera un UUID nuevo al abrir el formulario y lo reutiliza en todos los reintentos
+  y clics de ese mismo envío. Solo genera otro cuando el pedido se registró y el usuario
+  inicia un formulario nuevo.
+- `pedidos` guarda la clave junto al pedido, con restricción de unicidad en la base de datos.
+- Primera vez que llega la clave: crea el pedido y responde `201`.
+- La clave se repite **con el mismo cuerpo**: no crea otro pedido; responde `200` con el
+  mismo cuerpo del pedido creado la primera vez (mismo folio).
+- La clave se repite **con un cuerpo distinto**: responde `409` con
+  `idempotency_key_reutilizada` y no crea nada.
+
+**Respuesta exitosa** (`201`, o `200` si la clave ya se había usado con el mismo cuerpo)
+
+```json
+{
+  "folio": "PQ-20261117-7KQ3",
+  "estado": "CREADO",
+  "origen": "Av. Juárez 100, Centro, Guadalajara",
+  "destino": "Calle Hidalgo 25, Zapopan",
+  "distancia_km": 8.5,
+  "peso_kg": 2.3,
+  "dimensiones_cm": {"largo": 30, "ancho": 20, "alto": 15},
+  "urgente": false,
+  "seguro": true,
+  "fecha_limite": "2026-11-20",
+  "medio": "motocicleta",
+  "tipo_servicio": "express",
+  "costo": 129.11,
+  "moneda": "MXN",
+  "fecha_creacion": "2026-11-17T10:30:00-06:00"
+}
+```
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `falta_idempotency_key` | No viene el encabezado `Idempotency-Key` o no es un UUID válido. |
+| `400` | `datos_invalidos` | El cuerpo no es JSON válido, falta un campo o un valor no cumple las reglas (incluye `medio` o `tipo_servicio` inexistentes). |
+| `400` | `medio_no_apto` | `peso_kg` o `distancia_km` superan la capacidad del medio elegido. |
+| `409` | `idempotency_key_reutilizada` | La clave ya se usó con un cuerpo distinto. |
+| `503` | `servicio_no_disponible` | `pedidos` no responde (gateway) o `catalogo` no respondió a tiempo; el pedido no se crea. |
+
+**Consumido por:** app_flutter (formulario de pedido).
+
+### Consultar un pedido por folio
+
+| Campo | Valor |
+|---|---|
+| Servicio | pedidos |
+| Método | `GET` |
+| Ruta | `/api/pedidos/<folio>/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+El folio se acepta en mayúsculas o minúsculas.
+
+```
+GET /api/pedidos/PQ-20261117-7KQ3/
+```
+
+**Respuesta exitosa** (`200`)
+
+Solo datos mínimos para rastrear. No incluye `origen`, `destino`, peso, dimensiones, seguro
+ni costo.
+
+```json
+{
+  "folio": "PQ-20261117-7KQ3",
+  "estado": "EN_CAMINO",
+  "medio": "motocicleta",
+  "tipo_servicio": "express",
+  "fecha_creacion": "2026-11-17T10:30:00-06:00",
+  "fecha_limite": "2026-11-20",
+  "actualizado_en": "2026-11-17T12:05:00-06:00"
+}
+```
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `datos_invalidos` | El folio no cumple el formato `PQ-AAAAMMDD-XXXX`. |
+| `404` | `no_encontrado` | No existe un pedido con ese folio. |
+| `503` | `servicio_no_disponible` | El servicio `pedidos` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (pantalla de rastreo) y el servicio `asistente` (intención
+`rastrear`).
+
+### Cambiar el estado de un pedido
+
+| Campo | Valor |
+|---|---|
+| Servicio | pedidos |
+| Método | `PATCH` |
+| Ruta | `/api/pedidos/<folio>/estado/` |
+| Responsable | Int. 2 |
+| Estado | Propuesto |
+
+**Solicitud**
+
+```
+PATCH /api/pedidos/PQ-20261117-7KQ3/estado/
+```
+
+```json
+{
+  "estado": "EN_CAMINO"
+}
+```
+
+**Respuesta exitosa** (`200`)
+
+Mismos datos mínimos que la consulta por folio, más el estado anterior.
+
+```json
+{
+  "folio": "PQ-20261117-7KQ3",
+  "estado_anterior": "CREADO",
+  "estado": "EN_CAMINO",
+  "medio": "motocicleta",
+  "tipo_servicio": "express",
+  "fecha_creacion": "2026-11-17T10:30:00-06:00",
+  "fecha_limite": "2026-11-20",
+  "actualizado_en": "2026-11-17T12:05:00-06:00"
+}
+```
+
+**Errores**
+
+| Código | `error` | Cuándo ocurre |
+|---|---|---|
+| `400` | `datos_invalidos` | El cuerpo no es JSON válido, falta `estado`, el valor no es un estado conocido o el folio no cumple el formato. |
+| `404` | `no_encontrado` | No existe un pedido con ese folio. |
+| `409` | `transicion_invalida` | La transición no está en la tabla de transiciones válidas (por ejemplo `ENTREGADO → CANCELADO` o `CREADO → ENTREGADO`), incluido pedir el mismo estado que ya tiene. |
+| `503` | `servicio_no_disponible` | El servicio `pedidos` no responde (lo devuelve el gateway). |
+
+**Consumido por:** app_flutter (cancelar un pedido y, para la demostración, avanzar su estado).
+
+---
+
 ## Operaciones que el alcance mínimo debe cubrir
 
-Lista de referencia del enunciado. Cada una necesita un contrato aprobado:
+Lista de referencia del enunciado. Cada una necesita un contrato aprobado.
+Marcadas: ya tienen contrato propuesto en este archivo, pendiente de aprobación.
 
-- [ ] Explorar y buscar en el catálogo
+- [x] Explorar y buscar en el catálogo
 - [ ] Obtener una recomendación
-- [ ] Registrar un pedido
-- [ ] Consultar un pedido por folio
+- [x] Registrar un pedido
+- [x] Consultar un pedido por folio
 - [ ] Conversar con el asistente
