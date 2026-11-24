@@ -8,6 +8,9 @@
 # Cada servicio tiene su propio usuario, dueno unicamente de su base. Ningun
 # usuario puede conectarse a la base de otro servicio.
 #
+# CREATEDB permite que Django cree y borre la base temporal test_<servicio>
+# al correr las pruebas (python manage.py test). No da acceso a otras bases.
+#
 # Las contrasenas llegan por variables de entorno: <SERVICIO>_DB_PASSWORD
 # (por ejemplo CATALOGO_DB_PASSWORD). Ver .env.example en la raiz.
 set -euo pipefail
@@ -28,7 +31,7 @@ for servicio in $SERVICIOS; do
         --dbname "$POSTGRES_DB" \
         --set=servicio="$servicio" \
         --set=password="$password" <<-'EOSQL'
-		CREATE ROLE :"servicio" WITH LOGIN PASSWORD :'password';
+		CREATE ROLE :"servicio" WITH LOGIN CREATEDB PASSWORD :'password';
 		CREATE DATABASE :"servicio" OWNER :"servicio";
 		REVOKE ALL ON DATABASE :"servicio" FROM PUBLIC;
 	EOSQL
