@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/medio_entrega.dart';
 import '../services/api_client.dart';
+import '../services/aviso_error.dart';
 import 'medio_detalle_screen.dart';
 
 /// Máximo de caracteres de búsqueda que acepta el servidor (docs/api.md).
@@ -27,7 +28,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
   Timer? _temporizador;
 
   List<MedioEntrega>? _medios;
-  String? _error;
+  AvisoError? _error;
   bool _cargando = false;
 
   /// Texto de la última búsqueda enviada, para el mensaje de lista vacía.
@@ -83,7 +84,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     } on ApiException catch (e) {
       if (!mounted || numero != _numeroConsulta) return;
       setState(() {
-        _error = e.mensaje;
+        _error = AvisoError.de(e, funcion: 'El catálogo');
         _cargando = false;
       });
     }
@@ -137,13 +138,15 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     if (error != null) {
       return _Aviso(
         icono: Icons.cloud_off,
-        titulo: 'No se pudo cargar el catálogo',
-        mensaje: error,
-        accion: FilledButton.icon(
-          onPressed: _buscar,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Reintentar'),
-        ),
+        titulo: error.titulo,
+        mensaje: error.mensaje,
+        accion: error.reintentable
+            ? FilledButton.icon(
+                onPressed: _buscar,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              )
+            : null,
       );
     }
 

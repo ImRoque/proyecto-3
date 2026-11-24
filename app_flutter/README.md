@@ -34,11 +34,12 @@ La app abre con una **navegación inferior** de cinco pestañas:
 | Archivo | Responsabilidad |
 |---|---|
 | `config.dart` | URL base del gateway, leída con `String.fromEnvironment('API_URL')`. Por defecto `http://localhost:8080`. |
-| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})`, `obtenerMedio(clave)` y `listarTiposServicio()`. Pedidos: `registrarPedido(solicitud, idempotencyKey:)` y `consultarPedido(folio)`. Asistente: `enviarMensaje(mensaje)`. |
+| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 8 s y conversión de cada fallo en `ApiException` con su `TipoError` (sin conexión, tiempo agotado, `400`, `404`, `409`, `503`). Métodos del catálogo: `listarMedios({q})`, `obtenerMedio(clave)` y `listarTiposServicio()`. Pedidos: `registrarPedido(solicitud, idempotencyKey:)` y `consultarPedido(folio)`. Asistente: `enviarMensaje(mensaje)`. |
 | `models/medio_entrega.dart` | `MedioEntrega` con `fromJson` según el contrato de `docs/api.md`. |
 | `models/tipo_servicio.dart` | `TipoServicio` del catálogo. |
 | `models/pedido.dart` | `SolicitudPedido` (cuerpo del registro), `Pedido` (respuesta completa), `PedidoResumen` (consulta por folio), estados y formato del folio. |
 | `models/mensaje_chat.dart` | `RespuestaAsistente` (`intencion`, `respuesta`) y `MensajeChat` (burbuja del usuario o del asistente). |
+| `services/aviso_error.dart` | `AvisoError.de(error, funcion:)`: título, mensaje y si conviene reintentar. Lo usan todas las pantallas, así que web y Android muestran lo mismo. |
 | `services/idempotencia.dart` | Genera el UUID v4 de `Idempotency-Key` con `Random.secure()`. |
 | `screens/inicio_screen.dart` | Navegación inferior (Catálogo, Enviar, Rastrear, Asistente y Estado). |
 | `screens/catalogo_screen.dart` | Catálogo con búsqueda. |
@@ -114,5 +115,24 @@ Dos toques rápidos en **Confirmar envío** nunca crean dos pedidos:
 Si después de un error el usuario cambia datos y el servidor responde
 `409 idempotency_key_reutilizada`, la pantalla ofrece **Empezar envío nuevo**, que genera otra
 clave a propósito.
+
+### Cuando algo falla
+
+Todas las pantallas (catálogo, detalle, nuevo envío, rastreo y asistente) muestran el mismo
+tipo de aviso según el fallo:
+
+| Caso | Qué ve el usuario | Acción |
+|---|---|---|
+| Sin conexión con el gateway | "Sin conexión con el servidor" | **Reintentar** |
+| Respuesta lenta | Indicador de carga; a los 8 s, "El servidor no respondió a tiempo" | **Reintentar** |
+| `503` | "<Función> no está disponible… El resto de la app sigue funcionando" | **Reintentar** |
+| `400` | "Revisa los datos" con el `detalle` del servidor | Sin Reintentar: se corrige el dato (en el chat, el mensaje vuelve al campo) |
+
+El tiempo límite de 8 s es mayor que el peor caso del servidor al registrar (unos 6 s), para
+que un servicio caído llegue como `503`, y menor que los 10 s del gateway.
+
+Si el registro de un envío no recibe respuesta (sin conexión o tiempo agotado), **Reintentar**
+manda la **misma** `Idempotency-Key`: si el servidor sí lo había registrado, responde `200`
+con el mismo folio y no se duplica.
 
 Nota: **`pubspec.lock` se versiona** (es una aplicación, no una librería).

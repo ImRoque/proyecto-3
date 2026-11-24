@@ -137,15 +137,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No se pudo cargar el catálogo'), findsOneWidget);
-    expect(find.text('El servicio catalogo no respondió'), findsOneWidget);
+    // 503: dice qué función falla y que lo demás sigue funcionando.
+    expect(find.text('El catálogo no está disponible'), findsOneWidget);
+    expect(find.textContaining('El resto de la app sigue funcionando'), findsOneWidget);
 
     catalogoArriba = true;
     await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
 
     expect(llamadas, 2);
-    expect(find.text('No se pudo cargar el catálogo'), findsNothing);
+    expect(find.text('El catálogo no está disponible'), findsNothing);
     expect(find.text('Motocicleta'), findsOneWidget);
   });
 
@@ -172,5 +173,61 @@ void main() {
   test('formatearNumero quita el .0 pero conserva decimales reales', () {
     expect(formatearNumero(20.0), '20');
     expect(formatearNumero(4.5), '4.5');
+  });
+
+  testWidgets('sin conexión con el gateway muestra mensaje claro y Reintentar', (tester) async {
+    var conectado = false;
+    await _abrir(
+      tester,
+      MockClient((request) async {
+        if (!conectado) throw http.ClientException('XMLHttpRequest error.');
+        return _responderCatalogo(request);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sin conexión con el servidor'), findsOneWidget);
+    expect(find.textContaining('Revisa tu conexión a internet'), findsOneWidget);
+
+    conectado = true;
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Motocicleta'), findsOneWidget);
+  });
+
+  testWidgets('respuesta lenta: muestra carga y al pasar el tiempo límite ofrece reintentar', (
+    tester,
+  ) async {
+    var lento = true;
+    final cliente = MockClient((request) async {
+      if (lento) await Future<void>.delayed(const Duration(seconds: 30));
+      return _responderCatalogo(request);
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CatalogoScreen(
+          api: ApiClient(
+            baseUrl: 'http://gw',
+            cliente: cliente,
+            tiempoLimite: const Duration(seconds: 2),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('El servidor no respondió a tiempo'), findsOneWidget);
+    expect(find.textContaining('tardó más de 2 s'), findsOneWidget);
+
+    lento = false;
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Motocicleta'), findsOneWidget);
+
+    // Deja terminar la respuesta lenta que quedó pendiente.
+    await tester.pump(const Duration(seconds: 30));
   });
 }

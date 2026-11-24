@@ -4,6 +4,7 @@ import '../models/medio_entrega.dart';
 import '../models/pedido.dart';
 import '../models/tipo_servicio.dart';
 import '../services/api_client.dart';
+import '../services/aviso_error.dart';
 import '../services/idempotencia.dart';
 import 'catalogo_screen.dart' show formatearNumero, iconoMedio;
 import 'confirmacion_screen.dart';
@@ -58,7 +59,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
 
   List<MedioEntrega>? _medios;
   List<TipoServicio>? _tipos;
-  String? _errorCatalogo;
+  AvisoError? _errorCatalogo;
 
   bool _enviando = false;
   ApiException? _errorEnvio;
@@ -95,7 +96,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _errorCatalogo = e.mensaje);
+      setState(() => _errorCatalogo = AvisoError.de(e, funcion: 'El catálogo'));
     }
   }
 
@@ -193,7 +194,7 @@ class _NuevoEnvioScreenState extends State<NuevoEnvioScreen> {
   Widget _cuerpo(BuildContext context) {
     final errorCatalogo = _errorCatalogo;
     if (errorCatalogo != null) {
-      return _AvisoCatalogo(mensaje: errorCatalogo, alReintentar: _cargarCatalogo);
+      return _AvisoCatalogo(aviso: errorCatalogo, alReintentar: _cargarCatalogo);
     }
     final medios = _medios;
     final tipos = _tipos;
@@ -466,8 +467,24 @@ class _AvisoEnvio extends StatelessWidget {
   Widget build(BuildContext context) {
     final colores = Theme.of(context).colorScheme;
     final claveReutilizada = error.codigoError == 'idempotency_key_reutilizada';
-    // Sin respuesta o con 503 conviene reintentar tal cual; con 400 hay que corregir datos.
-    final puedeReintentar = error.codigoHttp == null || error.codigoHttp == 503;
+    final aviso = AvisoError.de(error, funcion: 'El registro de envíos');
+    // Sin conexión, sin respuesta a tiempo o con 503 se reintenta tal cual, con la misma
+    // Idempotency-Key; con 400 hay que corregir datos.
+    final puedeReintentar = !claveReutilizada && aviso.reintentable;
+    final String mensaje;
+    if (claveReutilizada) {
+      mensaje =
+          'Este envío ya se registró con otros datos. Si quieres mandar estos datos '
+          'como un pedido nuevo, empieza un envío nuevo.';
+    } else if (error.tipo == TipoError.datosInvalidos) {
+      mensaje = '${aviso.mensaje}\nCorrige el dato y vuelve a confirmar.';
+    } else if (puedeReintentar) {
+      mensaje =
+          '${aviso.mensaje}\nTus datos se conservan. Si el envío sí llegó, reintentar no lo '
+          'duplica.';
+    } else {
+      mensaje = aviso.mensaje;
+    }
     return Card(
       color: colores.errorContainer,
       child: Padding(
@@ -476,17 +493,12 @@ class _AvisoEnvio extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'No se pudo registrar el envío',
+              claveReutilizada ? 'No se pudo registrar el envío' : aviso.titulo,
+              key: const Key('titulo_error_envio'),
               style: TextStyle(fontWeight: FontWeight.bold, color: colores.onErrorContainer),
             ),
             const SizedBox(height: 4),
-            Text(
-              claveReutilizada
-                  ? 'Este envío ya se registró con otros datos. Si quieres mandar estos datos '
-                        'como un pedido nuevo, empieza un envío nuevo.'
-                  : error.mensaje,
-              style: TextStyle(color: colores.onErrorContainer),
-            ),
+            Text(mensaje, style: TextStyle(color: colores.onErrorContainer)),
             if (claveReutilizada || puedeReintentar) ...[
               const SizedBox(height: 8),
               Align(
@@ -511,9 +523,9 @@ class _AvisoEnvio extends StatelessWidget {
 }
 
 class _AvisoCatalogo extends StatelessWidget {
-  const _AvisoCatalogo({required this.mensaje, required this.alReintentar});
+  const _AvisoCatalogo({required this.aviso, required this.alReintentar});
 
-  final String mensaje;
+  final AvisoError aviso;
   final VoidCallback alReintentar;
 
   @override
@@ -527,12 +539,15 @@ class _AvisoCatalogo extends StatelessWidget {
             Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 12),
             Text(
-              'No se pudieron cargar los medios de entrega',
+              aviso.titulo,
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
-            Text(mensaje, textAlign: TextAlign.center),
+            Text(
+              'Sin el catálogo no se pueden elegir medio ni tipo de servicio. ${aviso.mensaje}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: alReintentar,
