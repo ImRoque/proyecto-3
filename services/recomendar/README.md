@@ -14,16 +14,97 @@
 
 ## Estado actual
 
-Esqueleto Django 5 (proyecto `config`, app `recomendar`). Por ahora solo expone la ruta
-de salud definida en `docs/api.md`:
+Django 5 (proyecto `config`, app `recomendar`). Expone las rutas de `docs/api.md`:
 
 ```
-GET /api/recomendar/health/  ->  200  {"servicio": "recomendar", "ok": true}
+GET  /api/recomendar/health/  ->  200  {"servicio": "recomendar", "ok": true}
+POST /api/recomendar/         ->  200  recomendación (ver "Recomendación con reglas")
+```
+
+## Recomendación con reglas
+
+| Archivo | Qué hace |
+|---|---|
+| `recomendar/modelo.py` | Carga `modelos/recomendador.joblib` **una vez** al iniciar el servicio (`RecomendarConfig.ready`). Las peticiones usan el modelo ya cargado; nunca entrenan ni vuelven a leer el archivo. |
+| `recomendar/validacion.py` | Valida la solicitud y la convierte en un `Envio`. |
+| `recomendar/reglas.py` | Reglas R1 a R4 de `docs/api.md`, una clase por regla con la misma interfaz (Strategy). |
+| `recomendar/recomendacion.py` | Toma las probabilidades del modelo, aplica las reglas y arma la respuesta del contrato. |
+| `recomendar/views.py` | `POST /api/recomendar/`: valida, pide probabilidades al modelo y devuelve la decisión. |
+
+Cómo se decide:
+
+1. El modelo da una probabilidad por medio. `medio_modelo` es el de mayor probabilidad y
+   `confianza` es esa probabilidad.
+2. Para cada medio se aplican las reglas en orden (R1 peso, R2 distancia, R3 tamaño,
+   R4 urgencia). La primera que lo descarta da el motivo.
+3. Si `medio_modelo` pasa todas las reglas, es el `medio_final` y `corregido_por_reglas` es
+   `false`. Si no, el final es el medio apto con mayor probabilidad y `corregido_por_reglas`
+   es `true`. El `motivo` nombra la regla que corrigió.
+4. `alternativas` son los demás medios aptos, ordenados por probabilidad.
+
+| Caso | Respuesta |
+|---|---|
+| Faltan datos o son inválidos | `400 datos_invalidos` |
+| Ningún medio cumple las reglas | `400 sin_medio_apto` |
+| No hay modelo cargado (falta el `.joblib`, está dañado o falla al predecir) | `503 modelo_no_disponible` |
+| El servicio está caído | `503 servicio_no_disponible` (lo responde el gateway) |
+
+Si no existe el `.joblib`, el servicio arranca igual: la ruta de salud responde `200` y la
+recomendación responde `503 modelo_no_disponible`.
+
+### Evidencia: corrección real por el gateway
+
+Ejecutado el 2026-11-23 con `docker compose up -d --build` y el modelo de este README
+(accuracy 0.9617), llamando al gateway en `http://localhost:8080`.
+
+**Entrada:** paquete de 1 kg, 4 km, urgente, de 42 × 18 × 12 cm.
+
+```bash
+curl -s -X POST http://localhost:8080/api/recomendar/ -H "Content-Type: application/json" -d '{"peso_kg": 1.0, "distancia_km": 4.0, "urgente": true, "dimensiones_cm": {"largo": 42, "ancho": 18, "alto": 12}}'
+```
+
+**Predicción del modelo** (probabilidades de `predict_proba`, leídas dentro del contenedor):
+
+| Medio | Probabilidad |
+|---|---|
+| dron | 0.748 |
+| motocicleta | 0.1863 |
+| bicicleta | 0.0549 |
+| camioneta | 0.0108 |
+
+**Reglas aplicadas:**
+
+- Dron: lo descarta **R3. Tamaño del paquete**, porque el lado más largo (42 cm) supera los
+  40 cm.
+- Motocicleta: pasa las cuatro reglas.
+- Bicicleta: la descarta **R4. Urgencia**, porque es urgente y va a más de 3 km.
+- Camioneta: pasa las cuatro reglas.
+
+**Salida final** (`HTTP/1.1 200 OK`, `Content-Type: application/json; charset=utf-8`):
+
+```json
+{"medio_modelo": "dron", "confianza": 0.748, "medio_final": "motocicleta", "corregido_por_reglas": true, "motivo": "El dron no lleva paquetes con un lado de más de 40 cm (el lado más largo mide 42 cm) [R3. Tamaño del paquete]; se eligió motocicleta, el siguiente medio apto según el modelo.", "alternativas": [{"medio": "camioneta", "confianza": 0.0108}]}
+```
+
+El modelo se equivoca porque en el dataset los paquetes ligeros casi siempre son pequeños:
+casi no vio paquetes de 1 kg con 42 cm de lado. La regla R3 lo corrige.
+
+El mismo envío con 25 cm de largo no se corrige:
+
+```json
+{"medio_modelo": "dron", "confianza": 0.8293, "medio_final": "dron", "corregido_por_reglas": false, "motivo": "El modelo propuso dron y cumple todas las reglas de negocio.", "alternativas": [{"medio": "motocicleta", "confianza": 0.115}, {"medio": "camioneta", "confianza": 0.0173}]}
+```
+
+Y con `"peso_kg": -1` responde `HTTP/1.1 400 Bad Request`:
+
+```json
+{"error": "datos_invalidos", "detalle": "peso_kg debe ser mayor que 0"}
 ```
 
 ## Modelo del recomendador (IA 1)
 
-El modelo se entrena **fuera de la API**, con scripts aparte. Las vistas todavía no lo usan.
+El modelo se entrena **fuera de la API**, con scripts aparte. El servicio solo lo carga al
+iniciar.
 
 | Archivo | Qué es |
 |---|---|
@@ -125,7 +206,8 @@ modelo.
 
 `modelos/recomendador.joblib` pesa cerca de 1.2 MB (comprimido). **Todavía no se sube al
 repositorio**: el equipo debe decidir si se versiona o si cada quien lo genera con
-`python -m entrenamiento.entrenar` antes de construir la imagen de Docker.
+`python -m entrenamiento.entrenar` antes de construir la imagen de Docker. La imagen copia
+la carpeta `modelos/` local; si no tiene el archivo, la recomendación responde `503`.
 
 ## Variables de entorno
 
@@ -135,6 +217,7 @@ repositorio**: el equipo debe decidir si se versiona o si cada quien lo genera c
 | `DEBUG` | `True` o `False` | `False` |
 | `ALLOWED_HOSTS` | Hosts permitidos, separados por coma | `localhost,127.0.0.1` |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL | Si no hay `DB_NAME`, usa SQLite |
+| `MODELO_RUTA` | Ruta del archivo `.joblib` del modelo | `modelos/recomendador.joblib` |
 
 Ver `.env.example`.
 
