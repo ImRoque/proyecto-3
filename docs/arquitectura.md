@@ -50,7 +50,7 @@ flowchart LR
 | Tecnología del gateway y reglas de enrutamiento | Propuesto (ver [5.1](#51-gateway-y-servicios)) |
 | Tecnología de cada microservicio | Propuesto (ver [5.1](#51-gateway-y-servicios)) |
 | Comunicación entre servicios (si la hay) | _pendiente_ |
-| Diseño de persistencia | Propuesto (ver [5.2](#52-diseño-de-persistencia)) |
+| Diseño de persistencia | Implementado (ver [5.2](#52-diseño-de-persistencia)) |
 | Orquestación del entorno local | _pendiente_ |
 | Comportamiento ante fallos parciales y cómo se demostrará | Propuesto (ver [5.3](#53-fallo-parcial)) |
 | Contratos de API | ver [api.md](api.md) |
@@ -72,7 +72,7 @@ flowchart LR
 
 ### 5.2 Diseño de persistencia
 
-**Estado:** Propuesto.
+**Estado:** Implementado (etapa 11).
 
 - Un solo servidor **PostgreSQL 16** (un contenedor) con **una base de datos por servicio**:
   `catalogo`, `pedidos`, `recomendar` y `asistente`. Se crean solo las que el servicio use.
@@ -85,6 +85,19 @@ flowchart LR
 - Los modelos de IA (`.joblib`) no se guardan en la base de datos; los carga su servicio.
 - Riesgo conocido: un solo servidor PostgreSQL es un punto único de falla para los servicios
   que usan base de datos. Se acepta por ser un entorno académico local.
+
+**Cómo quedó en Docker Compose:**
+
+- Los cuatro servicios se conectan a PostgreSQL (`DB_HOST=postgres`), cada uno a su base y con
+  su usuario. Ninguno usa SQLite dentro de Compose: SQLite queda solo para correr un servicio
+  suelto sin `DB_NAME`.
+- Las bases y usuarios los crea `infra/postgres/01-crear-bases.sh` la primera vez que arranca el
+  volumen `pgdata`. Cada usuario no tiene `CONNECT` sobre las bases de los demás.
+- Cada servicio aplica sus migraciones al iniciar. `catalogo` además carga sus datos iniciales
+  (`catalogo_inicial.json`) de forma idempotente. `recomendar` y `asistente` no tienen modelos
+  todavía; corren `migrate` igual para quedar listos.
+- Los datos sobreviven a reinicios de contenedores; solo se pierden con `docker compose down -v`.
+  Procedimiento de comprobación en [infra/README.md](../infra/README.md#comprobar-la-persistencia).
 
 ### 5.3 Fallo parcial
 

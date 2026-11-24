@@ -41,8 +41,29 @@ Un solo PostgreSQL 16 con una base por servicio (`docs/arquitectura.md`, secció
   docker compose up -d --build
   ```
 
-- Las migraciones de Django no se ejecutan al arrancar (los esqueletos aún no tienen modelos).
-  Cuando un servicio las tenga: `docker compose exec <servicio> python manage.py migrate`.
+- En Compose **todos los servicios usan PostgreSQL**: el `settings.py` de cada uno elige
+  PostgreSQL cuando existe `DB_NAME`, y Compose siempre la define. SQLite solo se usa al correr
+  un servicio suelto fuera de Compose (sin `DB_NAME`).
+- Las migraciones se aplican solas al iniciar cada contenedor:
+
+  | Servicio | Al arrancar |
+  |---|---|
+  | `catalogo` | `migrate` + `loaddata catalogo_inicial.json` (4 medios y 3 tipos de servicio) desde su `entrypoint.sh`. La carga es idempotente: actualiza por clave, no duplica. |
+  | `pedidos` | `migrate` desde su `entrypoint.sh`. |
+  | `recomendar`, `asistente` | `migrate` desde el `command` de `docker-compose.yml`. Hoy no tienen modelos (no crean tablas), pero así quedan listos y validan la conexión al arrancar. |
+
+- Los datos viven en el volumen `pgdata`: sobreviven a `docker compose restart` y a
+  `docker compose down` (sin `-v`).
+
+### Comprobar la persistencia
+
+```bash
+docker compose down -v && docker compose up -d --build
+curl -X POST http://localhost:8080/api/pedidos/ -H "Content-Type: application/json"   -H "Idempotency-Key: $(uuidgen)" -d '{...cuerpo de docs/api.md...}'
+docker compose restart            # o: docker compose down && docker compose up -d
+curl http://localhost:8080/api/pedidos/<folio>/    # debe responder 200 con el mismo pedido
+docker compose exec postgres psql -U postgres -d pedidos -c 'select folio, estado from pedidos_pedido;'
+```
 
 ## Variables de entorno
 

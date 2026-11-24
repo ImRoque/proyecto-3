@@ -67,6 +67,10 @@ services:
   recomendar:
     <<: *servicio-django
     build: ./services/recomendar
+    # Aplica migraciones antes de arrancar, igual que catalogo y pedidos.
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+      exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"
     environment:
       SECRET_KEY: ${RECOMENDAR_SECRET_KEY:?Define RECOMENDAR_SECRET_KEY en .env}
       DEBUG: ${DJANGO_DEBUG:-False}
@@ -80,6 +84,10 @@ services:
   asistente:
     <<: *servicio-django
     build: ./services/asistente
+    # Aplica migraciones antes de arrancar, igual que catalogo y pedidos.
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+      exec gunicorn config.wsgi:application --bind 0.0.0.0:8000"
     environment:
       SECRET_KEY: ${ASISTENTE_SECRET_KEY:?Define ASISTENTE_SECRET_KEY en .env}
       DEBUG: ${DJANGO_DEBUG:-False}
