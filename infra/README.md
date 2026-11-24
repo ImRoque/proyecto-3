@@ -32,6 +32,10 @@ Un solo PostgreSQL 16 con una base por servicio (`docs/arquitectura.md`, secció
 | `asistente` | `asistente` | `ASISTENTE_DB_PASSWORD` |
 
 - Cada usuario es dueño solo de su base y no tiene permiso `CONNECT` sobre las demás.
+- Cada usuario tiene `CREATEDB` para que `python manage.py test` pueda crear y borrar su base
+  temporal `test_<servicio>`. Si tu volumen es anterior a este cambio, borra el volumen
+  (`docker compose down -v`) o da el permiso a mano:
+  `docker compose exec postgres psql -U postgres -c 'ALTER ROLE <servicio> CREATEDB;'`
 - Compose pasa a cada servicio `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST=postgres` y `DB_PORT`.
 - El script de `postgres/` **solo corre cuando el volumen está vacío**. Si cambias el script o
   las contraseñas, borra el volumen (se pierden los datos locales):
@@ -80,4 +84,5 @@ docker compose stop <servicio>        # apagar un servicio (demo de fallo parcia
 docker compose start <servicio>       # volver a levantarlo
 docker compose down                   # apagar todo (conserva la base)
 docker compose exec postgres psql -U postgres   # consola de PostgreSQL
+docker compose exec <servicio> python manage.py test   # pruebas contra PostgreSQL
 ```
