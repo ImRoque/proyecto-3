@@ -60,6 +60,9 @@ curl -i http://localhost:8080/api/pedidos/health/      # sigue en 200
 docker compose start recomendar
 ```
 
+Demo completa de fallo parcial: `./scripts/demo_fallo_parcial.sh` (ver
+[docs/arquitectura.md](../docs/arquitectura.md#53-fallos-parciales), 5.3).
+
 Validar la sintaxis sin levantar nada:
 
 ```bash
