@@ -1,7 +1,9 @@
+import http.server
 import io
 import json
 import socket
 import tempfile
+import threading
 import time
 import urllib.error
 from pathlib import Path
@@ -408,3 +410,139 @@ class ModeloRealTests(SimpleTestCase):
         for mensaje, esperada in casos.items():
             with self.subTest(mensaje=mensaje):
                 self.assertEqual(modelo.obtener().clasificar(mensaje)[0], esperada)
+
+
+# ---------- pedidos y recomendar caídos o lentos, con sockets reales ----------
+
+class _ManejadorServicios(http.server.BaseHTTPRequestHandler):
+    """Responde como pedidos (GET) y recomendar (POST) según `modo`: ok, lento o cortado."""
+
+    def do_GET(self):
+        self._atender(PEDIDO)
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        self._atender(RECOMENDACION)
+
+    def _atender(self, datos):
+        try:
+            self._responder(datos)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # El cliente ya se fue por tiempo límite: es lo que se prueba.
+
+    def _responder(self, datos):
+        if self.server.modo == "lento":
+            time.sleep(self.server.espera)
+        cuerpo = json.dumps(datos).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        if self.server.modo == "cortado":
+            # Anuncia más bytes de los que manda y cierra: la respuesta llega incompleta.
+            self.send_header("Content-Length", str(len(cuerpo) + 100))
+            self.end_headers()
+            self.wfile.write(cuerpo[:5])
+            return
+        self.send_header("Content-Length", str(len(cuerpo)))
+        self.end_headers()
+        self.wfile.write(cuerpo)
+
+    def log_message(self, *args):
+        pass
+
+
+class ServidorFalso:
+    """pedidos o recomendar de mentira en 127.0.0.1 con un puerto libre."""
+
+    def __init__(self, modo="ok", espera=0):
+        self.servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ManejadorServicios)
+        self.servidor.daemon_threads = True
+        self.servidor.modo, self.servidor.espera = modo, espera
+        self.url = f"http://127.0.0.1:{self.servidor.server_address[1]}"
+
+    def __enter__(self):
+        threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
+        return self
+
+    def __exit__(self, *args):
+        self.servidor.shutdown()
+        self.servidor.server_close()
+
+
+def url_sin_servidor():
+    """URL de un puerto donde nadie escucha: conexión rechazada, como un servicio caído."""
+    with socket.socket() as libre:
+        libre.bind(("127.0.0.1", 0))
+        puerto = libre.getsockname()[1]
+    return f"http://127.0.0.1:{puerto}"
+
+
+@override_settings(SERVICIOS_TIMEOUT=0.5)
+class ServiciosRealesTests(SimpleTestCase):
+    """POST /api/asistente/ de punta a punta, llamando por HTTP real a otro servicio."""
+
+    LIMITE = 1.5  # SERVICIOS_TIMEOUT + margen
+
+    def setUp(self):
+        self.modelo = ModeloFijo()
+        anterior = modelo.usar(self.modelo)
+        self.addCleanup(modelo.usar, anterior)
+
+    def conversar(self, intencion, mensaje, **urls):
+        self.modelo.intencion = intencion
+        with self.settings(**urls):
+            inicio = time.monotonic()
+            respuesta = self.client.post(URL, data=json.dumps({"mensaje": mensaje}),
+                                         content_type="application/json")
+            duracion = time.monotonic() - inicio
+        self.assertEqual(respuesta.status_code, 200, respuesta.content)
+        self.assertEqual(respuesta.json()["intencion"], intencion)
+        self.assertLess(duracion, self.LIMITE)
+        return respuesta.json()["respuesta"]
+
+    def rastrear(self, url):
+        return self.conversar("rastrear", f"¿cómo va {FOLIO}?", PEDIDOS_URL=url)
+
+    def recomendar(self, url):
+        return self.conversar("recomendar", "3 kg a 5 km", RECOMENDAR_URL=url)
+
+    def test_pedidos_caido(self):
+        self.assertEqual(self.rastrear(url_sin_servidor()), textos.PEDIDOS_NO_DISPONIBLE)
+
+    def test_pedidos_lento(self):
+        with ServidorFalso("lento", espera=3) as pedidos:
+            self.assertEqual(self.rastrear(pedidos.url), textos.PEDIDOS_NO_DISPONIBLE)
+
+    def test_pedidos_respuesta_incompleta(self):
+        with ServidorFalso("cortado") as pedidos:
+            self.assertEqual(self.rastrear(pedidos.url), textos.PEDIDOS_NO_DISPONIBLE)
+
+    def test_pedidos_responde(self):
+        with ServidorFalso("ok") as pedidos:
+            self.assertIn(FOLIO, self.rastrear(pedidos.url))
+
+    def test_recomendar_caido(self):
+        self.assertEqual(self.recomendar(url_sin_servidor()), textos.RECOMENDAR_NO_DISPONIBLE)
+
+    def test_recomendar_lento(self):
+        with ServidorFalso("lento", espera=3) as recomendar:
+            self.assertEqual(self.recomendar(recomendar.url), textos.RECOMENDAR_NO_DISPONIBLE)
+
+    def test_recomendar_respuesta_incompleta(self):
+        with ServidorFalso("cortado") as recomendar:
+            self.assertEqual(self.recomendar(recomendar.url), textos.RECOMENDAR_NO_DISPONIBLE)
+
+    def test_recomendar_responde(self):
+        with ServidorFalso("ok") as recomendar:
+            self.assertIn("Te recomiendo enviarlo en motocicleta",
+                          self.recomendar(recomendar.url))
+
+    def test_dns_lento_no_pasa_del_tiempo_limite(self):
+        # Con el contenedor apagado, resolver su nombre tarda ~4 s y el timeout de urlopen
+        # no cubre esa búsqueda.
+        def dns_lento(*args, **kwargs):
+            time.sleep(3)
+            raise socket.gaierror("Name or service not known")
+
+        with mock.patch("socket.getaddrinfo", dns_lento):
+            self.assertEqual(self.recomendar("http://recomendar:8000"),
+                             textos.RECOMENDAR_NO_DISPONIBLE)
