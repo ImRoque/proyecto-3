@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Entrena el modelo al construir la imagen con un script aparte, nunca dentro de una petición
+# HTTP. El dataset y la semilla son fijos, así que cada build produce el mismo modelo. Si el
+# entrenamiento falla, el build falla.
+RUN python -m entrenamiento.entrenar
+
 RUN useradd --create-home app && chown -R app /app
 USER app
 
