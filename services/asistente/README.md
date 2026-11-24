@@ -62,7 +62,7 @@ fuera de tema:
 ### Servicios caídos
 
 Si pedidos o recomendar no responden en **3 segundos**, responden 5xx (incluido
-`503 modelo_no_disponible`) o mandan algo que no es JSON, el chat **no falla**: responde
+`503 modelo_no_disponible`), mandan algo que no es JSON o la respuesta llega cortada, el chat **no falla**: responde
 `200` con la intención y un mensaje amable ("En este momento no puedo consultar tu
 pedido..."). Saludo, horarios y cotizar siguen funcionando porque no llaman a nadie.
 
