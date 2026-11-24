@@ -13,17 +13,120 @@
 
 ## Estado actual
 
-Esqueleto Django 5 (proyecto `config`, app `asistente`). Por ahora solo expone la ruta
-de salud definida en `docs/api.md`:
+Django 5 (proyecto `config`, app `asistente`). Expone las rutas de `docs/api.md`:
 
 ```
-GET /api/asistente/health/  ->  200  {"servicio": "asistente", "ok": true}
+GET  /api/asistente/health/  ->  200  {"servicio": "asistente", "ok": true}
+POST /api/asistente/         ->  200  {"intencion": "...", "respuesta": "..."}
 ```
+
+## Chat
+
+| Archivo | Qué hace |
+|---|---|
+| `asistente/modelo.py` | Carga `modelos/intenciones.joblib` **una vez** al iniciar (`AsistenteConfig.ready`). Las peticiones usan el modelo ya cargado. |
+| `asistente/extraccion.py` | Saca del mensaje: folio, peso (kg, kilos, gramos), distancia (km, kilómetros, metros), medidas (`30x20x15 cm`) y urgencia. |
+| `asistente/clientes.py` | `ClientePedidos` y `ClienteRecomendar`: HTTP interno con tiempo límite total de 3 s. |
+| `asistente/adaptador.py` | `AdaptadorChat` (Adapter): convierte el JSON de pedidos y recomendar en texto. |
+| `asistente/textos.py` | Respuestas fijas: saludo, horarios, tarifas de referencia, ayuda y mensajes de error. |
+| `asistente/conversacion.py` | `Asistente`: detecta la intención y arma la respuesta. |
+| `asistente/views.py` | `POST /api/asistente/`: valida el mensaje y devuelve la respuesta. |
+
+### Respuesta por intención
+
+| Intención | Qué hace |
+|---|---|
+| `rastrear` | Si hay folio, consulta `GET /api/pedidos/<folio>/` y describe estado, medio, servicio y fecha límite. Si no hay folio, lo pide. Si el folio no existe, lo dice. |
+| `recomendar` | Necesita peso y distancia; si falta alguno, lo pide. Consulta `POST /api/recomendar/` y responde con `medio_final`, el `motivo` tal como lo da recomendar y las alternativas. Si no vienen medidas, supone 20×15×10 cm y lo avisa. |
+| `cotizar` | Texto fijo con las tarifas de referencia del catálogo inicial y el aviso de que el costo exacto se calcula al registrar el pedido (`docs/api.md`). |
+| `horarios`, `saludo` | Texto fijo. |
+| `desconocida` | Mensaje de ayuda con lo que el asistente sí puede hacer. |
+
+Cómo se elige la intención:
+
+1. Si el mensaje trae un folio válido (`PQ-AAAAMMDD-XXXX`), es `rastrear`. Así funciona
+   contestar solo el folio después de que el asistente lo pidió.
+2. Si no, la decide el clasificador. Si su confianza es menor que **0.40**, es `desconocida`.
+
+**Por qué 0.40.** Lo medí con el modelo real sobre los 38 mensajes de prueba y 11 mensajes
+fuera de tema:
+
+- Pasan a `desconocida` 7 de los 11 fuera de tema ("¿Venden pizzas?", "asdfgh", "gracias",
+  etc.) y 2 de los 4 errores de prueba.
+- A cambio, 2 de los 38 mensajes de prueba bien clasificados también caen en `desconocida`
+  (confianza 0.34 y 0.36).
+- Quedan mal 4 fuera de tema con confianza alta: "¿Qué hora es?" sale como `horarios`
+  (0.85) y "recomiéndame una película" como `recomendar` (0.80). Esto solo se arregla con
+  más datos.
+
+### Servicios caídos
+
+Si pedidos o recomendar no responden en **3 segundos**, responden 5xx (incluido
+`503 modelo_no_disponible`) o mandan algo que no es JSON, el chat **no falla**: responde
+`200` con la intención y un mensaje amable ("En este momento no puedo consultar tu
+pedido..."). Saludo, horarios y cotizar siguen funcionando porque no llaman a nadie.
+
+El tiempo límite cubre toda la llamada, incluida la búsqueda DNS. Con un contenedor apagado,
+resolver su nombre tarda unos 4 s y el `timeout` de `urlopen` no lo corta; por eso cada
+llamada corre en un hilo y se espera como máximo 3 s.
+
+| Caso | Respuesta |
+|---|---|
+| Falta `mensaje`, viene vacío o solo con espacios | `400 mensaje_vacio` |
+| No es JSON, `mensaje` no es texto o pasa de 500 caracteres | `400 datos_invalidos` |
+| No hay modelo cargado | `503 modelo_no_disponible` |
+
+### Evidencia por el gateway
+
+Ejecutado el 2026-11-23 con `docker compose up -d --build`, llamando a
+`http://localhost:8080`. Primero se registró un pedido real (`POST /api/pedidos/`), que
+devolvió el folio `PQ-20261123-Y8A6`, y se pasó a `EN_CAMINO`
+(`PATCH /api/pedidos/PQ-20261123-Y8A6/estado/`).
+
+> En Git Bash de Windows, curl no manda en UTF-8 los acentos escritos en la línea de
+> comandos y el asistente responde `400 datos_invalidos`. Para probar, guarda el cuerpo en
+> un archivo UTF-8 y usa `--data-binary @archivo.json`.
+
+```bash
+curl -s -X POST http://localhost:8080/api/asistente/ -H "Content-Type: application/json; charset=utf-8" --data-binary @mensaje.json
+```
+
+**"¿cómo va el folio PQ-20261123-Y8A6?"**
+
+```json
+{"intencion": "rastrear", "respuesta": "Tu pedido PQ-20261123-Y8A6 va en camino (EN_CAMINO). Va en motocicleta, servicio express. Fecha límite: 2026-11-26."}
+```
+
+**"¿qué me recomiendas para 3 kg a 5 km?"**
+
+```json
+{"intencion": "recomendar", "respuesta": "Te recomiendo enviarlo en bicicleta. El modelo propuso bicicleta y cumple todas las reglas de negocio. Otras opciones: motocicleta, camioneta. Supuse una caja chica de 20×15×10 cm; si es más grande, dime las medidas (por ejemplo 40x30x20 cm)."}
+```
+
+El asistente mandó a recomendar `{"peso_kg": 3.0, "distancia_km": 5.0, "urgente": false,
+"dimensiones_cm": {"largo": 20, "ancho": 15, "alto": 10}}`. Recomendar respondió
+`medio_final: "bicicleta"` con ese mismo `motivo`.
+
+**"¿qué horarios tienen?"**
+
+```json
+{"intencion": "horarios", "respuesta": "Atendemos de lunes a sábado de 8:00 a 20:00. Las entregas salen de lunes a sábado de 9:00 a 19:00; los domingos y días festivos no hay entregas. El servicio mismo día se puede pedir hasta las 14:00."}
+```
+
+**Con pedidos apagado** (`docker compose stop pedidos`), la misma pregunta del folio
+respondió `200` en 3.0 s:
+
+```json
+{"intencion": "rastrear", "respuesta": "En este momento no puedo consultar tu pedido. Intenta de nuevo en unos minutos."}
+```
+
+Al volver a encender pedidos (`docker compose start pedidos`), la consulta del folio
+respondió otra vez con el estado del pedido.
 
 ## Clasificador de intenciones (IA 2)
 
-El clasificador se entrena **fuera de la API**, con un script aparte. Las vistas todavía no
-lo usan.
+El clasificador se entrena **fuera de la API**, con un script aparte. El servicio solo lo
+carga al iniciar.
 
 | Archivo | Qué es |
 |---|---|
@@ -131,6 +234,10 @@ repositorio**: el equipo debe decidir si se versiona o si cada quien lo genera c
 | `DEBUG` | `True` o `False` | `False` |
 | `ALLOWED_HOSTS` | Hosts permitidos, separados por coma | `localhost,127.0.0.1` |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL | Si no hay `DB_NAME`, usa SQLite |
+| `PEDIDOS_URL` | URL interna de pedidos | `http://pedidos:8000` |
+| `RECOMENDAR_URL` | URL interna de recomendar | `http://recomendar:8000` |
+| `SERVICIOS_TIMEOUT` | Tiempo límite total, en segundos, de cada llamada a otro servicio | `3` |
+| `MODELO_RUTA` | Ruta del archivo `.joblib` del clasificador | `modelos/intenciones.joblib` |
 
 Ver `.env.example`.
 

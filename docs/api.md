@@ -675,9 +675,9 @@ momento; nunca se responden con un texto guardado.
 | `saludo` | "Hola, buenas tardes" | Información fija del asistente. | Ninguno. |
 | `horarios` | "¿A qué hora entregan?" | Información fija del asistente (horarios de atención y entrega). | Ninguno. |
 | `cotizar` | "¿Cuánto cuesta enviar un paquete?" | Información fija del asistente: tarifas de referencia por medio y tipo de servicio, y aviso de que el costo exacto lo calcula el sistema al registrar el pedido. | Ninguno. |
-| `rastrear` | "¿Dónde está mi pedido PQ-20261117-7KQ3?" | Consulta a la API de pedidos: `GET /api/pedidos/<folio>/`. | `folio` con formato `PQ-AAAAMMDD-XXXX`. Si no viene, la respuesta lo pide. |
-| `recomendar` | "¿Cómo mando 3 kg a 6 km, 30x20x15 cm, urgente?" | Consulta a la API de recomendar: `POST /api/recomendar/`. | `peso_kg`, `distancia_km`, `dimensiones_cm` y `urgente` (falso si no se menciona). Si falta alguno de los obligatorios, la respuesta los pide. |
-| `desconocida` | "¿Venden pizzas?" | Información fija del asistente: mensaje de ayuda con lo que sí puede hacer. | Ninguno. Se usa cuando la confianza del clasificador es baja. |
+| `rastrear` | "¿Dónde está mi pedido PQ-20261117-7KQ3?" | Consulta a la API de pedidos: `GET /api/pedidos/<folio>/`. | `folio` con formato `PQ-AAAAMMDD-XXXX`. Si no viene, la respuesta lo pide. Un mensaje con un folio válido siempre es `rastrear`, aunque el clasificador diga otra cosa. |
+| `recomendar` | "¿Cómo mando 3 kg a 6 km, 30x20x15 cm, urgente?" | Consulta a la API de recomendar: `POST /api/recomendar/`. | `peso_kg` y `distancia_km` (obligatorios: si falta alguno, la respuesta lo pide), `dimensiones_cm` y `urgente` (falso si no se menciona). Si no vienen las medidas, se suponen 20×15×10 cm (caja chica) y la respuesta lo avisa. |
+| `desconocida` | "¿Venden pizzas?" | Información fija del asistente: mensaje de ayuda con lo que sí puede hacer. | Ninguno. Se usa cuando la confianza del clasificador es menor que 0.40. |
 
 El asistente llama a los otros servicios por HTTP interno (`http://pedidos:8000/...` y
 `http://recomendar:8000/...`), nunca importando su código ni leyendo su base de datos.
