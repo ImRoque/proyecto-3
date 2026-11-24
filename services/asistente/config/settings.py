@@ -67,3 +67,9 @@ USE_I18N = True
 USE_TZ = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Servicios que consulta el asistente: nombres internos de Docker Compose.
+PEDIDOS_URL = os.environ.get("PEDIDOS_URL", "http://pedidos:8000")
+RECOMENDAR_URL = os.environ.get("RECOMENDAR_URL", "http://recomendar:8000")
+# Tiempo límite en segundos de cada llamada a otro servicio (docs/api.md, "Asistente").
+SERVICIOS_TIMEOUT = float(os.environ.get("SERVICIOS_TIMEOUT", "3"))
