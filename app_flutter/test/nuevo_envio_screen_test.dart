@@ -193,8 +193,9 @@ void main() {
     await tester.tap(_confirmar);
     await tester.pumpAndSettle();
 
-    expect(find.text('No se pudo registrar el envío'), findsOneWidget);
-    expect(find.text('El servicio catalogo no respondió'), findsOneWidget);
+    expect(find.text('El registro de envíos no está disponible'), findsOneWidget);
+    expect(find.textContaining('El resto de la app sigue funcionando'), findsOneWidget);
+    expect(find.textContaining('Tus datos se conservan'), findsOneWidget);
     expect(tester.widget<FilledButton>(_confirmar).onPressed, isNotNull);
 
     await tester.tap(find.text('Reintentar'));
@@ -273,7 +274,9 @@ void main() {
     await tester.tap(_confirmar);
     await tester.pumpAndSettle();
 
-    expect(find.text('motocicleta lleva máximo 20 kg'), findsOneWidget);
+    expect(find.text('Revisa los datos'), findsOneWidget);
+    expect(find.textContaining('motocicleta lleva máximo 20 kg'), findsOneWidget);
+    expect(find.textContaining('Corrige el dato'), findsOneWidget);
     expect(find.text('Reintentar'), findsNothing);
   });
 
@@ -301,13 +304,114 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No se pudieron cargar los medios de entrega'), findsOneWidget);
+    expect(find.text('El catálogo no está disponible'), findsOneWidget);
+    expect(find.textContaining('El resto de la app sigue funcionando'), findsOneWidget);
 
     catalogoArriba = true;
     await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('No se pudieron cargar los medios de entrega'), findsNothing);
+    expect(find.text('El catálogo no está disponible'), findsNothing);
     expect(find.widgetWithText(TextFormField, 'Origen'), findsOneWidget);
+  });
+
+  testWidgets('enviado sin respuesta a tiempo: Reintentar usa la misma clave y no duplica', (
+    tester,
+  ) async {
+    // El servidor sí registró el pedido en el primer intento, pero la respuesta no llegó a
+    // tiempo. Al reintentar con la misma clave responde 200 con el mismo folio.
+    var intentos = 0;
+    final gateway = _Gateway((_) async {
+      intentos++;
+      if (intentos == 1) await Future<void>.delayed(const Duration(seconds: 30));
+      return respuestaJson(pedidoJson(), intentos == 1 ? 201 : 200);
+    });
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NuevoEnvioScreen(
+          api: ApiClient(
+            baseUrl: 'http://gw',
+            cliente: gateway.cliente,
+            tiempoLimite: const Duration(seconds: 2),
+          ),
+          generarClave: _contadorClaves(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _llenar(tester);
+
+    await tester.tap(_confirmar);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Registrando…'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('El servidor no respondió a tiempo'), findsOneWidget);
+    expect(find.textContaining('reintentar no lo duplica'), findsOneWidget);
+
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.claves, ['clave-1', 'clave-1']);
+    expect(find.text('PQ-20261117-C3JU'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('sin conexión: mensaje claro y Reintentar con la misma clave', (tester) async {
+    var conectado = false;
+    final gateway = _Gateway((_) async {
+      if (!conectado) throw http.ClientException('Connection refused');
+      return respuestaJson(pedidoJson(), 201);
+    });
+    await _abrir(tester, gateway);
+    await _llenar(tester);
+
+    await tester.tap(_confirmar);
+    await tester.pumpAndSettle();
+    expect(find.text('Sin conexión con el servidor'), findsOneWidget);
+
+    conectado = true;
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.claves, ['clave-1', 'clave-1']);
+    expect(find.text('PQ-20261117-C3JU'), findsOneWidget);
+  });
+
+  testWidgets('un 400 dice qué dato está mal y deja corregirlo y volver a confirmar', (
+    tester,
+  ) async {
+    // La decisión final es del servidor: aquí rechaza el origen que la app dio por bueno.
+    final gateway = _Gateway((request) async {
+      final origen = (jsonDecode(utf8.decode(request.bodyBytes)) as Map)['origen'];
+      if (origen == 'Av. Juárez 100') {
+        return respuestaJson({
+          'error': 'datos_invalidos',
+          'detalle': 'El origen debe incluir colonia y ciudad',
+        }, 400);
+      }
+      return respuestaJson(pedidoJson(), 201);
+    });
+    await _abrir(tester, gateway);
+    await _llenar(tester);
+
+    await tester.tap(_confirmar);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Revisa los datos'), findsOneWidget);
+    expect(find.textContaining('El origen debe incluir colonia y ciudad'), findsOneWidget);
+    expect(find.text('Reintentar'), findsNothing);
+    final origen = find.widgetWithText(TextFormField, 'Origen');
+    expect(tester.widget<TextFormField>(origen).enabled, isTrue);
+
+    await tester.enterText(origen, 'Av. Juárez 100, Centro, Guadalajara');
+    await tester.tap(_confirmar);
+    await tester.pumpAndSettle();
+
+    expect(gateway.registros, hasLength(2));
+    expect(find.text('PQ-20261117-C3JU'), findsOneWidget);
   });
 }

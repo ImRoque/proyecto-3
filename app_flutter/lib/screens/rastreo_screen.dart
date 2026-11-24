@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/pedido.dart';
 import '../services/api_client.dart';
+import '../services/aviso_error.dart';
 import 'catalogo_screen.dart' show iconoMedio;
 
 /// Consulta un pedido por folio y muestra en qué paso va.
@@ -26,7 +27,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   /// Folio consultado que no existe (404).
   String? _noEncontrado;
-  String? _error;
+  AvisoError? _error;
 
   @override
   void initState() {
@@ -68,7 +69,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
         if (e.codigoHttp == 404) {
           _noEncontrado = folio;
         } else {
-          _error = e.mensaje;
+          _error = AvisoError.de(e, funcion: 'La consulta de pedidos');
         }
       });
     }
@@ -126,14 +127,17 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final error = _error;
     if (error != null) {
       return _Aviso(
-        icono: Icons.cloud_off,
-        titulo: 'No se pudo consultar el pedido',
-        mensaje: error,
-        accion: FilledButton.icon(
-          onPressed: _consultar,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Reintentar'),
-        ),
+        icono: error.reintentable ? Icons.cloud_off : Icons.edit_note,
+        titulo: error.titulo,
+        mensaje: error.mensaje,
+        // Con un 400 no sirve reintentar lo mismo: se corrige el folio en el campo de arriba.
+        accion: error.reintentable
+            ? FilledButton.icon(
+                onPressed: _consultar,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              )
+            : null,
       );
     }
     final pedido = _pedido;

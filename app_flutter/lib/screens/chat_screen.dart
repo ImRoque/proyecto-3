@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/mensaje_chat.dart';
 import '../services/api_client.dart';
+import '../services/aviso_error.dart';
 
 /// Límite de `mensaje` en docs/api.md. El servidor también lo revisa.
 const int largoMaximoMensaje = 500;
@@ -25,7 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _escribiendo = false;
 
   /// Error del último envío y el mensaje que falló, para reintentar.
-  String? _error;
+  AvisoError? _error;
   String? _pendiente;
 
   @override
@@ -75,10 +76,16 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+      final aviso = AvisoError.de(e, funcion: 'El asistente');
       setState(() {
         _escribiendo = false;
-        _error = e.mensaje;
-        _pendiente = mensaje;
+        _error = aviso;
+        if (aviso.reintentable) {
+          _pendiente = mensaje;
+        } else if (_texto.text.isEmpty) {
+          // 400: el mensaje vuelve al campo para corregirlo; reintentar lo mismo no sirve.
+          _texto.text = mensaje;
+        }
       });
     }
     _bajar();
@@ -104,7 +111,8 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(child: _conversacion(context)),
-          if (_error != null) _AvisoError(mensaje: _error!, alReintentar: _reintentar),
+          if (_error case final error?)
+            _AvisoError(aviso: error, alReintentar: error.reintentable ? _reintentar : null),
           _campo(context),
         ],
       ),
@@ -230,10 +238,12 @@ class _Escribiendo extends StatelessWidget {
 }
 
 class _AvisoError extends StatelessWidget {
-  const _AvisoError({required this.mensaje, required this.alReintentar});
+  const _AvisoError({required this.aviso, this.alReintentar});
 
-  final String mensaje;
-  final VoidCallback alReintentar;
+  final AvisoError aviso;
+
+  /// `null` cuando hay que corregir el mensaje en vez de reintentar.
+  final VoidCallback? alReintentar;
 
   @override
   Widget build(BuildContext context) {
@@ -249,11 +259,12 @@ class _AvisoError extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'No se pudo enviar tu mensaje. $mensaje',
+              '${aviso.titulo}. ${aviso.mensaje}',
               style: TextStyle(color: colores.onErrorContainer),
             ),
           ),
-          TextButton(onPressed: alReintentar, child: const Text('Reintentar')),
+          if (alReintentar case final reintentar?)
+            TextButton(onPressed: reintentar, child: const Text('Reintentar')),
         ],
       ),
     );

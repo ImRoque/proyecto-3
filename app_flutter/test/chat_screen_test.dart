@@ -127,7 +127,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('aviso_error')), findsOneWidget);
-    expect(find.textContaining('El servicio asistente no respondió'), findsOneWidget);
+    expect(find.textContaining('El asistente no está disponible'), findsOneWidget);
+    expect(find.textContaining('El resto de la app sigue funcionando'), findsOneWidget);
     expect(find.byKey(const Key('escribiendo')), findsNothing);
     expect(find.byKey(const Key('burbuja_usuario')), findsOneWidget);
 
@@ -142,14 +143,39 @@ void main() {
     expect(find.text('¡Hola! ¿En qué te ayudo?'), findsOneWidget);
   });
 
-  testWidgets('sin conexión muestra el mensaje del ApiClient', (tester) async {
+  testWidgets('sin conexión muestra un mensaje claro y Reintentar', (tester) async {
     await _abrir(tester, MockClient((_) async => throw http.ClientException('sin red')));
 
     await _escribir(tester, 'hola');
     await tester.tap(_botonEnviar);
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No se pudo conectar con el servidor'), findsOneWidget);
+    expect(find.textContaining('Sin conexión con el servidor'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
+  });
+
+  testWidgets('un 400 devuelve el mensaje al campo para corregirlo, sin Reintentar', (
+    tester,
+  ) async {
+    await _abrir(
+      tester,
+      MockClient(
+        (_) async => _json({
+          'error': 'datos_invalidos',
+          'detalle': 'El mensaje no puede tener más de 500 caracteres',
+        }, 400),
+      ),
+    );
+
+    await _escribir(tester, 'hola');
+    await tester.tap(_botonEnviar);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Revisa los datos'), findsOneWidget);
+    expect(find.textContaining('no puede tener más de 500 caracteres'), findsOneWidget);
+    expect(find.text('Reintentar'), findsNothing);
+    final campo = tester.widget<TextField>(find.byKey(const Key('campo_mensaje')));
+    expect(campo.controller!.text, 'hola');
   });
 
   testWidgets('el campo no deja escribir más de 500 caracteres', (tester) async {
