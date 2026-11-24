@@ -8,9 +8,33 @@ import '../models/mensaje_chat.dart';
 import '../models/pedido.dart';
 import '../models/tipo_servicio.dart';
 
+/// Tipo de fallo de una llamada, para que cada pantalla decida qué mostrar y si ofrece reintentar.
+enum TipoError {
+  /// No se pudo hablar con el gateway (sin red, URL equivocada, servidor apagado).
+  sinConexion,
+
+  /// No hubo respuesta dentro del tiempo límite de [ApiClient].
+  tiempoAgotado,
+
+  /// `400`: algún dato está mal; hay que corregirlo antes de volver a mandar.
+  datosInvalidos,
+
+  /// `404`.
+  noEncontrado,
+
+  /// `409`.
+  conflicto,
+
+  /// `503`: la función no está disponible; el resto de la app sigue funcionando.
+  noDisponible,
+
+  /// Cualquier otra respuesta inesperada.
+  otro,
+}
+
 /// Error de una llamada al API, con un mensaje listo para mostrar al usuario.
 class ApiException implements Exception {
-  const ApiException(this.mensaje, {this.codigoHttp, this.codigoError});
+  const ApiException(this.mensaje, {this.codigoHttp, this.codigoError, this._tipo});
 
   /// Texto claro para mostrar en pantalla.
   final String mensaje;
@@ -21,9 +45,29 @@ class ApiException implements Exception {
   /// Valor del campo `error` del formato único de docs/api.md, si vino.
   final String? codigoError;
 
+  final TipoError? _tipo;
+
+  /// Tipo de fallo. Si no se indicó, se deduce del código HTTP.
+  TipoError get tipo =>
+      _tipo ??
+      switch (codigoHttp) {
+        400 => TipoError.datosInvalidos,
+        404 => TipoError.noEncontrado,
+        409 => TipoError.conflicto,
+        503 => TipoError.noDisponible,
+        _ => TipoError.otro,
+      };
+
   @override
-  String toString() => 'ApiException($codigoHttp, $codigoError): $mensaje';
+  String toString() => 'ApiException($tipo, $codigoHttp, $codigoError): $mensaje';
 }
+
+/// Tiempo límite de cada llamada desde la app.
+///
+/// Es mayor que el peor caso del servidor al registrar un pedido (pedidos consulta dos veces a
+/// catalogo con 3 s cada una), para que un servicio caído llegue como `503` y no como "tardó
+/// demasiado". Es menor que los 10 s del gateway, para no dejar al usuario esperando más.
+const Duration tiempoLimitePorDefecto = Duration(seconds: 8);
 
 /// Único lugar de la app que hace llamadas HTTP.
 ///
@@ -32,7 +76,7 @@ class ApiClient {
   ApiClient({
     required this.baseUrl,
     http.Client? cliente,
-    this.tiempoLimite = const Duration(seconds: 5),
+    this.tiempoLimite = tiempoLimitePorDefecto,
   }) : _cliente = cliente ?? http.Client();
 
   /// URL base del gateway, sin `/` al final.
@@ -80,14 +124,23 @@ class ApiClient {
     try {
       respuesta = await llamada().timeout(tiempoLimite);
     } on TimeoutException {
-      throw ApiException('El servidor tardó más de ${tiempoLimite.inSeconds} s en responder.');
-    } on http.ClientException {
-      throw const ApiException(
-        'No se pudo conectar con el servidor. Revisa tu conexión y la URL del API.',
+      throw ApiException(
+        'El servidor tardó más de ${tiempoLimite.inSeconds} s en responder.',
+        tipo: TipoError.tiempoAgotado,
       );
+    } on http.ClientException {
+      throw _sinConexion;
+    } on Exception {
+      // Otros fallos de red que no envuelve el paquete http (por ejemplo, en Android).
+      throw _sinConexion;
     }
     return _procesar(respuesta);
   }
+
+  static const _sinConexion = ApiException(
+    'No se pudo conectar con el servidor. Revisa tu conexión y la URL del API.',
+    tipo: TipoError.sinConexion,
+  );
 
   Map<String, dynamic> _procesar(http.Response respuesta) {
     final cuerpo = _decodificar(respuesta);

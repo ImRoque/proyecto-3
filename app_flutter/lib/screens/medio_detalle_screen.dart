@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/medio_entrega.dart';
 import '../services/api_client.dart';
+import '../services/aviso_error.dart';
 import 'catalogo_screen.dart' show formatearNumero, iconoMedio;
 
 /// Detalle de un medio de entrega, consultado por su clave.
@@ -17,7 +18,7 @@ class MedioDetalleScreen extends StatefulWidget {
 
 class _MedioDetalleScreenState extends State<MedioDetalleScreen> {
   MedioEntrega? _medio;
-  String? _error;
+  AvisoError? _error;
   bool _cargando = true;
 
   @override
@@ -41,7 +42,7 @@ class _MedioDetalleScreenState extends State<MedioDetalleScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.mensaje;
+        _error = AvisoError.de(e, funcion: 'El catálogo');
         _cargando = false;
       });
     }
@@ -68,13 +69,21 @@ class _MedioDetalleScreenState extends State<MedioDetalleScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(error ?? 'No se pudo cargar el medio.', textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: _cargar,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
+              Text(
+                error?.titulo ?? 'No se pudo cargar el medio',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 4),
+              Text(error?.mensaje ?? '', textAlign: TextAlign.center),
+              if (error == null || error.reintentable) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _cargar,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ],
             ],
           ),
         ),

@@ -129,8 +129,8 @@ void main() {
 
     await _buscar(tester, 'PQ-20261117-C3JU');
     await tester.pumpAndSettle();
-    expect(find.text('No se pudo consultar el pedido'), findsOneWidget);
-    expect(find.text('El servicio pedidos no respondió'), findsOneWidget);
+    expect(find.text('La consulta de pedidos no está disponible'), findsOneWidget);
+    expect(find.textContaining('El resto de la app sigue funcionando'), findsOneWidget);
 
     pedidosArriba = true;
     await tester.tap(find.text('Reintentar'));
@@ -138,5 +138,24 @@ void main() {
 
     expect(llamadas, 2);
     expect(_iconoPaso(tester, 'ENTREGADO'), Icons.radio_button_checked);
+  });
+
+  testWidgets('un 400 muestra el detalle y no ofrece Reintentar', (tester) async {
+    await _abrir(
+      tester,
+      MockClient(
+        (_) async => respuestaJson({
+          'error': 'datos_invalidos',
+          'detalle': 'El folio no tiene el formato PQ-AAAAMMDD-XXXX',
+        }, 400),
+      ),
+    );
+
+    await _buscar(tester, 'PQ-20261117-C3JU');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Revisa los datos'), findsOneWidget);
+    expect(find.text('El folio no tiene el formato PQ-AAAAMMDD-XXXX'), findsOneWidget);
+    expect(find.text('Reintentar'), findsNothing);
   });
 }
