@@ -8,7 +8,7 @@ import 'package:proyecto3/screens/inicio_screen.dart';
 import 'package:proyecto3/services/api_client.dart';
 
 void main() {
-  testWidgets('la navegacion inferior cambia entre las cuatro secciones', (tester) async {
+  testWidgets('la navegacion inferior cambia entre las cinco secciones', (tester) async {
     final cliente = MockClient((request) async {
       if (request.url.path == '/api/catalogo/medios/') {
         return http.Response(jsonEncode({'medios': [], 'total': 0}), 200);
@@ -41,6 +41,10 @@ void main() {
     await tester.tap(find.text('Rastrear'));
     await tester.pumpAndSettle();
     expect(find.text('Rastrear envío'), findsOneWidget);
+
+    await tester.tap(find.text('Asistente').last);
+    await tester.pumpAndSettle();
+    expect(find.text('¿En qué te ayudo?'), findsOneWidget);
 
     await tester.tap(find.text('Estado'));
     await tester.pumpAndSettle();

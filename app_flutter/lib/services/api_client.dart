@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/medio_entrega.dart';
+import '../models/mensaje_chat.dart';
 import '../models/pedido.dart';
 import '../models/tipo_servicio.dart';
 
@@ -189,6 +190,18 @@ class ApiClient {
   Future<PedidoResumen> consultarPedido(String folio) async {
     final datos = await getJson('/api/pedidos/${Uri.encodeComponent(folio)}/');
     return _convertir(() => PedidoResumen.fromJson(datos));
+  }
+
+  // ---------- Asistente (docs/api.md, sección "Asistente") ----------
+
+  /// `POST /api/asistente/` con `{"mensaje": ...}`.
+  ///
+  /// Si un servicio que usa el asistente está caído, el servidor igual responde `200` con
+  /// un texto que lo avisa. Los errores del contrato (`mensaje_vacio`, `datos_invalidos`,
+  /// `modelo_no_disponible`, `servicio_no_disponible`) llegan en [ApiException.codigoError].
+  Future<RespuestaAsistente> enviarMensaje(String mensaje) async {
+    final datos = await _postJson('/api/asistente/', {'mensaje': mensaje});
+    return _convertir(() => RespuestaAsistente.fromJson(datos));
   }
 
   /// Convierte errores de formato del JSON en [ApiException] con un mensaje claro.

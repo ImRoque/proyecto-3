@@ -4,9 +4,9 @@
 
 **Responsable:** Int. 5
 
-## Estado actual (Etapa 5, Hito B)
+## Estado actual (Etapa 10, Hito C)
 
-La app abre con una **navegación inferior** de cuatro pestañas:
+La app abre con una **navegación inferior** de cinco pestañas:
 
 - **Catálogo:** lista los medios de entrega de `GET /api/catalogo/medios/` con un campo de
   búsqueda (`?q=`, máximo 100 caracteres) que consulta al escribir, después de 400 ms sin
@@ -19,6 +19,13 @@ La app abre con una **navegación inferior** de cuatro pestañas:
 - **Rastrear:** consulta por folio (`GET /api/pedidos/<folio>/`) con la **línea de estados**
   `CREADO → EN_CAMINO → ENTREGADO` (o `CREADO → CANCELADO`) y estados de **cargando**,
   **error con Reintentar** y **folio no encontrado**.
+- **Asistente:** chat con el asistente del comprador (`POST /api/asistente/`). Muestra
+  burbujas del usuario (derecha) y del asistente (izquierda), un indicador **Escribiendo…**
+  mientras espera y, si falla, un aviso con el motivo y **Reintentar**, que reenvía el mismo
+  mensaje sin duplicar la burbuja. No deja enviar mensajes vacíos ni de más de 500
+  caracteres, ni otro mensaje mientras espera la respuesta. Si un servicio que usa el
+  asistente está caído, el servidor responde `200` con un texto que lo avisa y la app lo
+  muestra como cualquier respuesta.
 - **Estado:** la pantalla de la Etapa 4, que consulta `GET /api/<servicio>/health/` de los
   4 servicios y muestra cada uno como *Conectado* o *No disponible*.
 
@@ -27,18 +34,20 @@ La app abre con una **navegación inferior** de cuatro pestañas:
 | Archivo | Responsabilidad |
 |---|---|
 | `config.dart` | URL base del gateway, leída con `String.fromEnvironment('API_URL')`. Por defecto `http://localhost:8080`. |
-| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})`, `obtenerMedio(clave)` y `listarTiposServicio()`. Pedidos: `registrarPedido(solicitud, idempotencyKey:)` y `consultarPedido(folio)`. |
+| `services/api_client.dart` | `ApiClient`: **único** lugar que hace llamadas HTTP. Tiempo límite de 5 s y conversión de errores de red, tiempo agotado y `503` en `ApiException` con un mensaje claro. Métodos del catálogo: `listarMedios({q})`, `obtenerMedio(clave)` y `listarTiposServicio()`. Pedidos: `registrarPedido(solicitud, idempotencyKey:)` y `consultarPedido(folio)`. Asistente: `enviarMensaje(mensaje)`. |
 | `models/medio_entrega.dart` | `MedioEntrega` con `fromJson` según el contrato de `docs/api.md`. |
 | `models/tipo_servicio.dart` | `TipoServicio` del catálogo. |
 | `models/pedido.dart` | `SolicitudPedido` (cuerpo del registro), `Pedido` (respuesta completa), `PedidoResumen` (consulta por folio), estados y formato del folio. |
+| `models/mensaje_chat.dart` | `RespuestaAsistente` (`intencion`, `respuesta`) y `MensajeChat` (burbuja del usuario o del asistente). |
 | `services/idempotencia.dart` | Genera el UUID v4 de `Idempotency-Key` con `Random.secure()`. |
-| `screens/inicio_screen.dart` | Navegación inferior (Catálogo y Estado). |
+| `screens/inicio_screen.dart` | Navegación inferior (Catálogo, Enviar, Rastrear, Asistente y Estado). |
 | `screens/catalogo_screen.dart` | Catálogo con búsqueda. |
 | `screens/medio_detalle_screen.dart` | Detalle de un medio de entrega. |
 | `screens/estado_screen.dart` | Pantalla de estado de los servicios. |
 | `screens/nuevo_envio_screen.dart` | Formulario de nuevo envío. |
 | `screens/confirmacion_screen.dart` | Envío registrado: folio, costo y accesos a rastrear o a un envío nuevo. |
 | `screens/rastreo_screen.dart` | Consulta por folio y `LineaEstados`. |
+| `screens/chat_screen.dart` | Chat con el asistente. |
 | `main.dart` | Abre la pantalla de inicio. |
 
 Las pantallas no hacen HTTP directo: todo pasa por `ApiClient`.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import 'catalogo_screen.dart';
+import 'chat_screen.dart';
 import 'estado_screen.dart';
 import 'nuevo_envio_screen.dart';
 import 'rastreo_screen.dart';
@@ -34,6 +35,7 @@ class _InicioScreenState extends State<InicioScreen> {
           CatalogoScreen(api: widget.api),
           NuevoEnvioScreen(api: widget.api),
           RastreoScreen(api: widget.api),
+          ChatScreen(api: widget.api),
           EstadoScreen(api: widget.api, apiUrl: widget.apiUrl),
         ],
       ),
@@ -55,6 +57,11 @@ class _InicioScreenState extends State<InicioScreen> {
             icon: Icon(Icons.travel_explore_outlined),
             selectedIcon: Icon(Icons.travel_explore),
             label: 'Rastrear',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble),
+            label: 'Asistente',
           ),
           NavigationDestination(
             icon: Icon(Icons.monitor_heart_outlined),
