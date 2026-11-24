@@ -8,3 +8,5 @@ venv/
 Dockerfile
 .dockerignore
 README.md
+# El modelo se entrena dentro de la imagen; nunca se copia uno local que pueda estar viejo.
+modelos/

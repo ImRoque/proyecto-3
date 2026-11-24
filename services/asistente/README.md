@@ -222,9 +222,14 @@ Lectura de la métrica:
 
 ### Archivo del modelo
 
-`modelos/intenciones.joblib` pesa cerca de 55 KB (comprimido). **Todavía no se sube al
-repositorio**: el equipo debe decidir si se versiona o si cada quien lo genera con
-`python -m entrenamiento.entrenar` antes de construir la imagen de Docker.
+`modelos/intenciones.joblib` **no se sube al repositorio**: la imagen de Docker lo genera al
+construirse (`RUN python -m entrenamiento.entrenar` en el `Dockerfile`), a partir de
+`datasets/` y con semilla fija. Así cualquiera que clone el repo y corra
+`docker compose up -d --build` tiene el modelo, y el servicio nunca entrena dentro de una
+petición. El `.dockerignore` excluye `modelos/` para no copiar un archivo local viejo.
+
+Fuera de Docker, genéralo con `python -m entrenamiento.entrenar` desde la carpeta del servicio.
+Si cambias el dataset, reconstruye la imagen: `docker compose up -d --build asistente`.
 
 ## Variables de entorno
 
