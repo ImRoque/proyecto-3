@@ -3,6 +3,7 @@
 asistente nunca importa código de otro servicio ni lee su base de datos: les pregunta por
 HTTP interno (nombres de Docker tomados de variables de entorno) con tiempo límite.
 """
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -68,7 +69,9 @@ class _ClienteHttp:
             if error.code >= 500:
                 raise ServicioNoDisponible(self.servicio, f"respondió {error.code}") from error
             return error.code, self._leer(error)
-        except (urllib.error.URLError, TimeoutError, OSError) as error:
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError,
+                OSError) as error:
+            # HTTPException cubre respuestas cortadas (IncompleteRead) o mal formadas.
             raise ServicioNoDisponible(self.servicio, str(error)) from error
 
     def _leer(self, respuesta):
@@ -76,6 +79,8 @@ class _ClienteHttp:
             return json.loads(respuesta.read().decode("utf-8"))
         except (UnicodeDecodeError, ValueError) as error:
             raise ServicioNoDisponible(self.servicio, "respondió algo que no es JSON") from error
+        except (http.client.HTTPException, OSError) as error:
+            raise ServicioNoDisponible(self.servicio, "la respuesta llegó incompleta") from error
 
 
 class ClientePedidos(_ClienteHttp):
