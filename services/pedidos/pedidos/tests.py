@@ -1,11 +1,15 @@
 import datetime
+import http.server
 import json
 import re
+import socket
+import threading
+import time
 import urllib.error
 import uuid
 from unittest import mock
 
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from .cliente_catalogo import CatalogoNoDisponible, ClienteCatalogo
@@ -415,3 +419,141 @@ class ClienteCatalogoTests(SimpleTestCase):
         cliente = ClienteCatalogo("http://x")
         self.assertEqual(cliente.obtener_tipo_servicio("express")["multiplicador_costo"], 1.5)
         self.assertIsNone(cliente.obtener_tipo_servicio("teletransporte"))
+
+
+# ---------- catalogo caído o lento, con sockets reales (no se simula urlopen) ----------
+
+class _ManejadorCatalogo(http.server.BaseHTTPRequestHandler):
+    """Responde como catalogo según `modo` del servidor: ok, lento o cortado."""
+
+    def do_GET(self):
+        try:
+            self._responder()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # El cliente ya se fue por tiempo límite: es lo que se prueba.
+
+    def _responder(self):
+        servidor = self.server
+        if servidor.modo == "lento":
+            time.sleep(servidor.espera)
+        if self.path.startswith("/api/catalogo/medios/"):
+            datos = MEDIOS.get(self.path.rstrip("/").rsplit("/", 1)[-1])
+        else:
+            datos = {"tipos_servicio": list(TIPOS.values())}
+        cuerpo = json.dumps(datos).encode("utf-8")
+        self.send_response(200 if datos else 404)
+        self.send_header("Content-Type", "application/json")
+        if servidor.modo == "cortado":
+            # Anuncia más bytes de los que manda y cierra: la respuesta llega incompleta.
+            self.send_header("Content-Length", str(len(cuerpo) + 100))
+            self.end_headers()
+            self.wfile.write(cuerpo[:5])
+            return
+        self.send_header("Content-Length", str(len(cuerpo)))
+        self.end_headers()
+        self.wfile.write(cuerpo)
+
+    def log_message(self, *args):
+        pass
+
+
+class ServidorCatalogo:
+    """catalogo de mentira en 127.0.0.1 con un puerto libre."""
+
+    def __init__(self, modo="ok", espera=0):
+        self.servidor = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ManejadorCatalogo)
+        self.servidor.daemon_threads = True
+        self.servidor.modo, self.servidor.espera = modo, espera
+        self.url = f"http://127.0.0.1:{self.servidor.server_address[1]}"
+
+    def __enter__(self):
+        threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
+        return self
+
+    def __exit__(self, *args):
+        self.servidor.shutdown()
+        self.servidor.server_close()
+
+
+def url_sin_servidor():
+    """URL de un puerto donde nadie escucha: conexión rechazada, como un servicio caído."""
+    with socket.socket() as libre:
+        libre.bind(("127.0.0.1", 0))
+        puerto = libre.getsockname()[1]
+    return f"http://127.0.0.1:{puerto}"
+
+
+class ClienteCatalogoTiemposTests(SimpleTestCase):
+    TIMEOUT = 0.5
+
+    def assertNoDisponibleRapido(self, cliente):
+        inicio = time.monotonic()
+        with self.assertRaises(CatalogoNoDisponible):
+            cliente.obtener_medio("motocicleta")
+        self.assertLess(time.monotonic() - inicio, self.TIMEOUT + 0.5)
+
+    def test_servicio_caido_lanza_catalogo_no_disponible(self):
+        self.assertNoDisponibleRapido(ClienteCatalogo(url_sin_servidor(), timeout=self.TIMEOUT))
+
+    def test_respuesta_lenta_se_corta_en_el_tiempo_limite(self):
+        with ServidorCatalogo("lento", espera=3) as catalogo:
+            self.assertNoDisponibleRapido(ClienteCatalogo(catalogo.url, timeout=self.TIMEOUT))
+
+    def test_respuesta_incompleta_lanza_catalogo_no_disponible(self):
+        with ServidorCatalogo("cortado") as catalogo:
+            self.assertNoDisponibleRapido(ClienteCatalogo(catalogo.url, timeout=self.TIMEOUT))
+
+    def test_dns_lento_no_pasa_del_tiempo_limite(self):
+        # Con el contenedor de catalogo apagado, resolver su nombre tarda ~4 s y el
+        # timeout de urlopen no cubre esa búsqueda.
+        def dns_lento(*args, **kwargs):
+            time.sleep(3)
+            raise socket.gaierror("Name or service not known")
+
+        with mock.patch("socket.getaddrinfo", dns_lento):
+            self.assertNoDisponibleRapido(
+                ClienteCatalogo("http://catalogo:8000", timeout=self.TIMEOUT))
+
+    def test_servidor_rapido_sigue_respondiendo(self):
+        with ServidorCatalogo("ok") as catalogo:
+            cliente = ClienteCatalogo(catalogo.url, timeout=self.TIMEOUT)
+            self.assertEqual(cliente.obtener_medio("dron")["clave"], "dron")
+            self.assertEqual(cliente.obtener_tipo_servicio("express")["clave"], "express")
+
+
+@override_settings(CATALOGO_TIMEOUT=0.5)
+class RegistroConCatalogoRealTests(BasePedidos):
+    """POST /api/pedidos/ de punta a punta, con catalogo por HTTP real."""
+
+    def setUp(self):
+        # Sin el CatalogoFalso de BasePedidos: se usa el ClienteCatalogo verdadero.
+        pass
+
+    def registrar_contra(self, url_catalogo):
+        with self.settings(CATALOGO_URL=url_catalogo):
+            inicio = time.monotonic()
+            respuesta = self.registrar()
+            return respuesta, time.monotonic() - inicio
+
+    def test_catalogo_caido_responde_503_sin_crear_pedido(self):
+        respuesta, duracion = self.registrar_contra(url_sin_servidor())
+
+        self.assertError(respuesta, 503, "servicio_no_disponible")
+        self.assertEqual(respuesta.json()["detalle"], "El servicio catalogo no respondió")
+        self.assertEqual(Pedido.objects.count(), 0)
+        self.assertLess(duracion, 1.5)
+
+    def test_catalogo_lento_responde_503_en_el_tiempo_limite(self):
+        with ServidorCatalogo("lento", espera=3) as catalogo:
+            respuesta, duracion = self.registrar_contra(catalogo.url)
+
+        self.assertError(respuesta, 503, "servicio_no_disponible")
+        self.assertEqual(Pedido.objects.count(), 0)
+        self.assertLess(duracion, 1.5)
+
+    def test_catalogo_responde_y_el_pedido_se_crea(self):
+        with ServidorCatalogo("ok") as catalogo:
+            respuesta, _ = self.registrar_contra(catalogo.url)
+
+        self.assertEqual(respuesta.status_code, 201, respuesta.content)
+        self.assertEqual(Pedido.objects.count(), 1)

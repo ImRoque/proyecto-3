@@ -2,12 +2,20 @@
 
 pedidos nunca importa código de catalogo: le pregunta por HTTP interno con tiempo límite.
 """
+import http.client
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as TiempoAgotado
 
 from django.conf import settings
+
+# El timeout de urlopen no cubre la búsqueda DNS: con el contenedor de catalogo apagado,
+# resolver su nombre tarda ~4 s. Cada llamada corre en un hilo y se espera como máximo
+# `timeout` segundos en total; si se agota, el hilo termina solo en segundo plano.
+_HILOS = ThreadPoolExecutor(max_workers=8, thread_name_prefix="cliente-catalogo")
 
 
 class CatalogoNoDisponible(Exception):
@@ -21,9 +29,20 @@ class ClienteCatalogo:
         self.timeout = timeout if timeout is not None else settings.CATALOGO_TIMEOUT
 
     def _get(self, ruta):
-        """GET a catalogo. Devuelve el JSON, o None si respondió 404."""
+        """GET a catalogo. Devuelve el JSON, o None si respondió 404.
+
+        El tiempo total (DNS, conexión y lectura) no pasa de `self.timeout` segundos.
+        """
         url = f"{self.url_base}/api/catalogo/{ruta}"
         peticion = urllib.request.Request(url, headers={"Accept": "application/json"})
+        futuro = _HILOS.submit(self._enviar, peticion)
+        try:
+            return futuro.result(timeout=self.timeout)
+        except TiempoAgotado as error:
+            futuro.cancel()
+            raise CatalogoNoDisponible(f"no respondió en {self.timeout:g} s") from error
+
+    def _enviar(self, peticion):
         try:
             with urllib.request.urlopen(peticion, timeout=self.timeout) as respuesta:
                 return json.loads(respuesta.read().decode("utf-8"))
@@ -31,7 +50,9 @@ class ClienteCatalogo:
             if error.code == 404:
                 return None
             raise CatalogoNoDisponible(f"catalogo respondió {error.code}") from error
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
+        except (urllib.error.URLError, http.client.HTTPException, TimeoutError, OSError,
+                ValueError) as error:
+            # HTTPException cubre respuestas cortadas (IncompleteRead) o mal formadas.
             raise CatalogoNoDisponible(str(error)) from error
 
     def obtener_medio(self, clave):

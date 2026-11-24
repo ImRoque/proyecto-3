@@ -37,6 +37,9 @@ base rechaza el segundo `INSERT` y esa petición responde con el pedido de la pr
 `catalogo` por HTTP. Si no responde dentro de `CATALOGO_TIMEOUT`, el registro responde
 `503 servicio_no_disponible` y no crea nada; la consulta y el cambio de estado siguen
 funcionando porque no lo necesitan.
+El límite cubre toda la llamada (búsqueda DNS, conexión y lectura), así que ni un
+`catalogo` apagado ni uno lento dejan colgado el registro. Una respuesta cortada o que no es
+JSON cuenta igual como `503`.
 
 ## Variables de entorno
 
