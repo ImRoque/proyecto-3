@@ -1,3 +1,7 @@
 Django==5.2.19
 psycopg[binary]==3.3.9
 gunicorn==27.0.1
+# Modelo: la versión de scikit-learn debe ser la misma al entrenar y al cargar el .joblib.
+scikit-learn==1.9.1
+joblib==1.6.0
+numpy==2.5.5

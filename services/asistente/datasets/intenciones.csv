@@ -1,0 +1,151 @@
+texto,intencion
+"Hola",saludo
+"hola buenas tardes",saludo
+"Buenos días",saludo
+"buenas noches",saludo
+"Qué tal, buen día",saludo
+"Hola, ¿cómo estás?",saludo
+"holi",saludo
+"Buenas",saludo
+"Qué onda",saludo
+"hola que tal",saludo
+"Buen día, ¿me pueden ayudar?",saludo
+"Hola, necesito ayuda",saludo
+"oye hola",saludo
+"Hola buenas, ¿hay alguien ahí?",saludo
+"saludos",saludo
+"¡Hola! ¿Qué tal?",saludo
+"buenas tardes joven",saludo
+"Hola, buenas noches, ¿me atienden?",saludo
+"hey",saludo
+"buen dia",saludo
+"q tal",saludo
+"Holaaa",saludo
+"Hola, ¿con quién hablo?",saludo
+"Buenas tardes, tengo una pregunta",saludo
+"Hola, ¿me puedes ayudar con algo?",saludo
+"Buenos días, ¿cómo le va?",saludo
+"qué hubo",saludo
+"hola hola",saludo
+"¡Buenas tardes!",saludo
+"Hola, es la primera vez que uso la app",saludo
+"¿A qué hora entregan?",horarios
+"¿Cuál es su horario de atención?",horarios
+"¿Abren los domingos?",horarios
+"¿Hasta qué hora reciben paquetes?",horarios
+"¿Trabajan en días festivos?",horarios
+"¿A qué hora abren?",horarios
+"horario de entregas",horarios
+"¿Entregan en sábado?",horarios
+"¿A qué hora cierran hoy?",horarios
+"¿Qué días trabajan?",horarios
+"¿Hacen entregas en la noche?",horarios
+"¿Entregan el 25 de diciembre?",horarios
+"¿A qué hora pasa el repartidor?",horarios
+"¿Tienen servicio las 24 horas?",horarios
+"¿Abren en Semana Santa?",horarios
+"¿Desde qué hora puedo mandar un paquete?",horarios
+"¿El horario es el mismo entre semana y en fin de semana?",horarios
+"¿Cuál es la última hora para envíos del mismo día?",horarios
+"q horario tienen",horarios
+"¿Atienden el chat en la madrugada?",horarios
+"¿Están abiertos ahorita?",horarios
+"¿Hasta qué hora puedo pedir un envío express?",horarios
+"¿Entregan los domingos en la mañana?",horarios
+"¿A qué hora empiezan las entregas?",horarios
+"horarios porfa",horarios
+"¿Trabajan el 16 de septiembre?",horarios
+"¿En qué horario vuelan los drones?",horarios
+"¿Hasta qué hora hay entregas en bicicleta?",horarios
+"¿Cierran a la hora de la comida?",horarios
+"¿Me dicen sus horarios de lunes a viernes?",horarios
+"¿Cuánto cuesta enviar un paquete?",cotizar
+"¿Cuánto me cobran por mandar una caja?",cotizar
+"precio de envío",cotizar
+"¿Cuánto sale mandar algo a Zapopan?",cotizar
+"¿Qué tarifas manejan?",cotizar
+"¿Cuánto cuesta el envío express?",cotizar
+"¿Es muy caro el envío por dron?",cotizar
+"¿Cuánto cobran por kilómetro?",cotizar
+"¿Cuánto cuesta el seguro del paquete?",cotizar
+"cotización de un envío",cotizar
+"¿Me puedes cotizar un envío de 5 kilos?",cotizar
+"¿Cuánto me sale mandar 10 kg a 20 km?",cotizar
+"¿Qué precio tiene el envío del mismo día?",cotizar
+"¿Cuánto vale mandar un sobre?",cotizar
+"¿Hay costo extra si es urgente?",cotizar
+"¿Cuánto cuesta la camioneta?",cotizar
+"¿Cobran por peso o por distancia?",cotizar
+"¿Cuál es el envío más barato?",cotizar
+"¿Tienen promociones o descuentos?",cotizar
+"cuanto cuesta",cotizar
+"¿Cuánto es lo mínimo que cobran?",cotizar
+"¿Cuánto pagaría por un paquete de 2 kilos en moto?",cotizar
+"¿El precio incluye IVA?",cotizar
+"¿Cuánto cuesta mandar en bicicleta?",cotizar
+"¿Qué tanto más caro es express que estándar?",cotizar
+"dame un precio aproximado",cotizar
+"¿Cuánto cuesta asegurar mi envío?",cotizar
+"¿Qué tan caro sale mandar a otra ciudad?",cotizar
+"¿Cuánto me cobran por 300 km?",cotizar
+"¿Qué precio tiene mandar un paquete grande?",cotizar
+"¿Dónde está mi pedido PQ-20261117-7KQ3?",rastrear
+"Quiero rastrear mi paquete",rastrear
+"¿Ya va en camino mi envío?",rastrear
+"rastrear PQ-20261120-A4BZ",rastrear
+"¿Cuándo llega mi pedido?",rastrear
+"mi folio es PQ-20261118-9XKM",rastrear
+"¿Ya entregaron mi paquete?",rastrear
+"estado del pedido PQ-20261119-H7TP",rastrear
+"No me ha llegado mi paquete",rastrear
+"¿Me ayudas a ubicar mi envío?",rastrear
+"PQ-20261121-QW3E",rastrear
+"¿Qué pasó con mi pedido?",rastrear
+"¿Mi pedido ya salió?",rastrear
+"seguimiento de envío",rastrear
+"¿En qué va mi paquete con folio pq-20261117-z9r2?",rastrear
+"¿Por qué no ha llegado mi envío?",rastrear
+"Quiero saber el estatus de mi pedido",rastrear
+"¿Ya lo recogió el repartidor?",rastrear
+"dónde viene mi caja",rastrear
+"¿Ya está en camino el PQ-20261122-M5N8?",rastrear
+"¿Me pueden decir dónde va mi paquete?",rastrear
+"¿Mi pedido sigue como creado?",rastrear
+"checa mi folio PQ-20261116-T6YU porfa",rastrear
+"¿Cuánto le falta a mi envío para llegar?",rastrear
+"¿Ya se entregó mi pedido o lo cancelaron?",rastrear
+"tengo un folio y quiero ver cómo va",rastrear
+"rastreo",rastrear
+"¿Cómo va mi entrega?",rastrear
+"¿Llegó mi paquete a su destino?",rastrear
+"¿Me rastreas el pedido PQ-20261123-K8LP?",rastrear
+"¿Cómo mando 3 kg a 6 km, 30x20x15 cm, urgente?",recomendar
+"¿Qué me recomiendas para mandar una caja de 10 kilos?",recomendar
+"¿En qué conviene mandar un paquete chico?",recomendar
+"¿Me conviene dron o moto para 1 kg?",recomendar
+"¿Con qué medio envío un sobre a 4 km?",recomendar
+"Tengo un paquete de 25 kg, ¿en qué lo mando?",recomendar
+"¿Qué transporte me sugieres para 2 kilos a 8 km?",recomendar
+"¿Puedo mandar algo de 50 cm en dron?",recomendar
+"recomiéndame un medio de entrega",recomendar
+"¿Cuál es la mejor opción para un envío urgente de 5 km?",recomendar
+"¿Lo mando en bici o en moto?",recomendar
+"quiero mandar 15 kg a 30 km, ¿qué uso?",recomendar
+"¿Qué medio es mejor para una caja de 40x40x40?",recomendar
+"¿Me recomiendas camioneta para un mueble?",recomendar
+"¿Cabe en la moto una caja de 60 cm?",recomendar
+"necesito mandar un paquete de 800 gramos urgente, ¿qué me sugieres?",recomendar
+"¿En qué medio llega más rápido algo de 1 kilo a 3 km?",recomendar
+"¿Qué vehículo uso para 100 kg?",recomendar
+"¿Sirve el dron para mandar 3 kilos?",recomendar
+"ayúdame a elegir cómo enviar mi paquete",recomendar
+"¿La bicicleta aguanta 7 kg a 5 km?",recomendar
+"tengo una caja de 20x15x10 de 2 kg, ¿cómo la mando?",recomendar
+"¿Qué me conviene para mandar documentos a 9 km?",recomendar
+"¿Cuál medio me recomiendas para 12 km y 18 kilos?",recomendar
+"recomendación de envío para 4 kg, 6 km, no urgente",recomendar
+"¿Qué opción es mejor, dron o bicicleta?",recomendar
+"¿Cómo envío una pantalla grande?",recomendar
+"¿Qué medio aguanta 30 kilos?",recomendar
+"sugiéreme un medio para un paquete de 1.5 kg a 7 km urgente",recomendar
+"¿Con qué lo mando para que llegue hoy? Pesa 3 kilos y son 10 km",recomendar
