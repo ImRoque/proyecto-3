@@ -87,6 +87,45 @@ flutter run -d emulator-5554 --dart-define=API_URL=http://10.0.2.2:8080
 
 (`flutter devices` muestra el id real del emulador o teléfono.)
 
+## Compilar web y apk
+
+La URL del gateway queda **fija dentro del build** con `--dart-define=API_URL=...`. Si se omite,
+se usa `http://localhost:8080`: sirve en web, pero en un teléfono `localhost` es el propio
+teléfono y la app mostrará "Sin conexión con el servidor".
+
+### Web
+
+```bash
+flutter build web --dart-define=API_URL=http://localhost:8080
+```
+
+El resultado queda en `build/web/`. Para probarlo, sírvelo con cualquier servidor estático
+(el gateway permite CORS desde cualquier origen):
+
+```bash
+python -m http.server 5000 -d build/web
+```
+
+y abre `http://localhost:5000`.
+
+### Android (apk)
+
+1. Averigua la IP de la PC en la red local (`ipconfig` en Windows, "Dirección IPv4").
+2. Compila con esa IP. El teléfono debe estar en la misma red y el firewall debe permitir
+   el puerto 8080:
+
+```bash
+flutter build apk --debug --dart-define=API_URL=http://<IP-de-la-PC>:8080
+```
+
+3. El apk queda en `build/app/outputs/flutter-apk/app-debug.apk`. Instálalo con
+   `flutter install` o copiándolo al teléfono.
+
+Se compila en **debug** porque el gateway se sirve por `http://` y el tráfico sin cifrar
+solo está permitido en debug y profile (ver [Android](#android)). Un apk **release** necesitaría
+el gateway detrás de `https://`. Nunca uses la IP interna de Docker (`172.x.x.x`) ni el nombre
+de un servicio (`catalogo:8000`): la app solo debe conocer el gateway.
+
 ## Android
 
 - `INTERNET` está declarado en `android/app/src/main/AndroidManifest.xml`.
